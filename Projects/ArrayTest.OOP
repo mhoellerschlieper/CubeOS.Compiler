@@ -1,0 +1,37 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 11.08.2009 20:52:03
+//Description:
+//*************************************************************}
+Main;
+var i:Int32;
+    Feld: Array[-10..10] of Int32;
+    
+Begin 
+     i := 1233;
+
+     Feld[-10]:= 101;
+     Feld[2]:= 102;
+     Feld[3]:= 103;
+     
+     
+     Writeln(i);
+     i:= Feld[-10];
+     Writeln(i);
+     
+     i:= Feld[2];
+     Writeln(i);
+
+     i:= Feld[3];
+     Writeln(i);
+
+     for i:= -10 to 10 do
+     begin
+          if Feld[i]=0 then
+             Feld[i]:= i*2;
+          writeln(Feld[i]);
+     end;
+     
+End; // of Maintask

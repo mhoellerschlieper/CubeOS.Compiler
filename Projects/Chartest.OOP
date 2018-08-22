@@ -1,0 +1,48 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 11.08.2009 20:52:03
+//Description:
+//*************************************************************}
+Main;
+var i:Int16;
+    cha:Char;
+    chb:Char;
+    b:Byte;
+    bool:Boolean;
+    s1:String;
+    s2:String;
+    D1: Single;
+    D2: single;
+    Feld: Array[1..10] of Int32;
+Begin 
+     CHa := 'z';
+     CHb := 'Y';
+     i := 1233;
+
+     //Feld[1]:= 100;
+     
+     s1 := 'Dies ist ein Test...';
+     
+     
+     D1:= 10.0;
+     D2:= 20.0;
+     
+     s2 := '111111111111111111111111111111';
+     
+     Writeln(D1);
+     Writeln(D2);
+     
+     D2:= D1*D2;
+     Writeln(D2);
+     
+     Writeln(CHa);
+     CHb := Cha;
+     Writeln(CHb);
+     Writeln(s2);
+     s2 := s1;
+     Writeln(s2);
+     Writeln(s1);
+     Writeln(i);
+End; // of Maintask

@@ -1,0 +1,146 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 29.07.2007 09:47:02
+//Description:
+//*************************************************************
+
+//**************************************************
+// KALASSE Test1
+//**************************************************
+
+class TTest1 of Base implements
+      Public
+            iValue1: Int32;
+            iValue2: Int32;
+            iValue3: Int32;
+            iValue4: Int32;
+            iValue5: Int32;
+            iValue6: Int32;
+            
+          
+            //**************************************************
+            //        Rekursions Algorithmus
+            //**************************************************            
+            
+            Function PowerRek(
+                      iPValue2: Int32;
+                      iMultiplikator: Int32;
+                      iCount:int32):Int32;
+            begin
+                 if iCount <  iMultiplikator then
+                 begin
+                   Result := PowerRek(
+                                     iPValue2 * 2, 
+                                     iMultiplikator, 
+                                     iCount + 1);
+                 end
+                 else
+                  Result := iPValue2;   
+            end;
+           //**************************************************
+           //
+           //************************************************** 
+           Procedure SetVal4(iPValue2: Int32);
+           begin
+              iValue4 := iPValue2;  
+           end;
+           //**************************************************
+           //         Quadrat - Methoden
+           //**************************************************            
+           Function Quadrat(iQ: Int32): Int32;
+           begin
+                Result := PowerRek(iQ,2,1) + PowerRek(iQ,2,1)
+           end;
+end;
+//**************************************************
+// KALASSE Test2
+//**************************************************
+class TTest2 of Base implements
+      Public
+            iValue1: Int32;
+            iValue4: Int32;
+            iValue5: Int32;
+            Obj1:TTest1;
+            
+                        
+            Procedure ForTest;
+            var index: int32;
+            begin
+              iValue5:=1;
+              for Index := iValue5 to 10 do
+              begin
+                iValue5 := iValue5 + Index;   
+                writeln(Index);
+              end;
+            end;
+
+            Procedure INI;
+            begin
+              Obj1 := Create(TTest1);  
+              Obj1.iValue3 := 7777;
+              iValue4 := 10; 
+            end;
+            
+            Procedure SetVal4(iPValue2: Int32);
+            begin 
+              
+            end;
+
+           procedure LocVarTest;
+           var a:int32;
+               b:int32;
+               c:int32;
+           begin
+                a := 10000;
+                b := 20000;
+                c := 30000;
+                a:= b + c;
+                iValue5 := a;
+           end;
+            
+end;
+
+//*************************************************************
+Main;
+Var Test1:TTest1;
+    Test2:TTest2;
+    Wert:Int32;
+Begin
+    //Writeln('TEst'); // <== offen: konstante Strings
+    Test1:=Create(TTest1);
+
+    Writeln(Test1.Quadrat(10));
+    Writeln(GetAllocMem);
+
+    Test1.iValue3 := 24;
+    Test2:=Create(TTest2);
+    Wert := 99;
+    Test2.SetVal4(Wert);  // <== offen: Varparameter
+    Writeln(Wert);                
+    Test2.INI;
+    
+    Writeln(GetAllocMem);
+
+    Test2.Obj1.iValue2 := 2222;
+    Writeln(Test2.Obj1.iValue2);
+    Writeln(Test2.Obj1.iValue3);
+
+    Writeln(Test1.PowerRek(2,16,1)); 
+    
+    Writeln(Test1.PowerRek(2,8,1)); 
+
+    Writeln(Test1.PowerRek(2,4,1)); 
+    
+    Writeln(Test1.Quadrat(10));
+    Test2.iValue4 := 12345;
+    Writeln(Test1.iValue2); 
+    Writeln(GetAllocMem);  
+    
+    Test2.ForTest;
+    writeln(Test2.iValue5);
+    Test2.LocVarTEst;
+    writeln(Test2.iValue5);
+    writeln(Test2.iValue5);
+end;

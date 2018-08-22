@@ -1,0 +1,25 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 22.06.2009 13:18:18
+//Description:
+//*************************************************************}
+
+class TItem of Base implements
+      Private
+            
+      Public
+            iValue: Int16;
+end;
+
+Main;
+Var     
+    iValue: Int16;
+    iValue1: Int32;
+Begin 
+      iValue:= 1;
+    
+      Writeln(iValue);
+                 
+End; // of Maintask

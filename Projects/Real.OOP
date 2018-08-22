@@ -1,0 +1,35 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 31.08.2007 15:39:51
+//Description:
+//*************************************************************}
+ class TMath of Base implements
+      Public
+      function FloatToStr(sNumber: Single): String;
+      begin
+           Result := '12345';
+      end;
+ end;
+
+//*************************************************************}
+
+Main;
+Var
+   r1: Single;
+   r2: Single;
+
+   r3: Single;
+   
+   M: TMath;
+   s: string;
+
+Begin 
+   M:= create(TMath);   
+   r1:= 7.5;  
+   r2:= 7.5;
+   r1:= r1 + r2*2.0;
+   s := M.FloatToStr(r1);
+   writeln(s);
+End; // of Maintask

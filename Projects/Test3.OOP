@@ -1,0 +1,42 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 29.07.2007 09:47:02
+//Description:
+//*************************************************************
+class TTest1 of Base implements
+      Public
+            iValue1: Int32;
+            iValue2: Int32;
+            iValue3: Int32;
+            iValue4: Int32;
+            
+          
+            //**************************************************
+            //
+            //**************************************************            
+            
+            Procedure Power(
+                      iPValue2: Int32;
+                      iMultiplikator: Int32);
+            var iCount:Int32;
+            begin
+                 iCount := 1;
+                 iValue1 := iPValue2;
+                 while iCount <  iMultiplikator do
+                 begin
+                   iValue1 := iValue1 * iPValue2;  
+                   iCount := iCount + 1;
+                 end;
+            end;
+end;
+
+//*************************************************************
+Main;
+Var Test1:TTest1;
+Begin
+    Test1:=Create(TTest1);
+    Test1.Power(2,16);
+    Writeln(Test1.iValue1);
+end;

@@ -1,0 +1,22 @@
+Main;
+var 
+    Wert1: Int16;
+    Wert2: Int16;
+    Wert3: Int16;
+begin
+    Wert1:=1;
+    Wert2:=2;
+    Wert3:=3;
+
+    if wert1 = 1 then
+    begin
+         writeln(Wert1)
+    end
+    else
+    begin
+         writeln(Wert2);
+    end;
+
+    Wert3:=16;
+    writeln(Wert3);
+end;

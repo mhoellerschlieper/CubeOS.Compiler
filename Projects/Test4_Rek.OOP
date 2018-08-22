@@ -1,0 +1,70 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 29.07.2007 09:47:02
+//Description:
+//*************************************************************
+
+
+//**************************************************
+// KLASSE Test2
+//**************************************************
+class TTest2 of Base implements
+      Public
+           iValue1: Int32;
+           iValue2: Int32;
+           iValue3: Int32;
+                        
+           procedure LocVarTest1;
+           var a: Int32;
+               b: Int32;
+               c: Int32; 
+               d: Int32;
+               e: Int32;
+               f: Int32;
+           begin
+              a:= 100;
+              b:= 200;
+              c:= 300;
+              iValue1 := a + b + c ;
+           end;
+            
+           procedure LocVarTest2(
+                     a: Int32;
+                     b: Int32;
+                     c: Int32 );
+           begin
+              iValue2 := a + b + c ;
+           end;
+
+           procedure LocVarTest3(
+                     a: Int32;
+                     b: Int32;
+                     c: Int32 );
+           var d: Int32;
+               e: Int32;
+               f: Int32;
+           begin
+              d:= 1000000;
+              e:= 1000000;
+              f:= 1000000;
+              
+              iValue3 := a + b + c + d+ e+ f;
+           end;
+end;
+
+//*************************************************************
+Main;
+Var 
+    Test2:TTest2;
+    
+Begin
+    Test2:=Create(TTest2);
+    Test2.LocVarTEst1;
+    writeln(Test2.iValue1);
+    Test2.LocVarTEst2(200000,300000,400000);
+    writeln(Test2.iValue2);
+    Test2.LocVarTEst3(200000,300000,400000);
+    writeln(Test2.iValue3);
+end;

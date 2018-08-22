@@ -1,0 +1,22 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 17.08.2007 17:51:08
+//Description:
+//*************************************************************}
+Main;
+var i32: Int32;
+    iCount: Int32;
+Begin 
+     i32 := 10;
+     iCount := 0;
+     while iCount < 10 do
+     begin
+          
+          writeln(i32);
+          i32:= 40 + i32 + 2000 + 17;     
+          writeln(i32);
+          iCount := iCount + 1;
+     end;
+End; // of Maintask

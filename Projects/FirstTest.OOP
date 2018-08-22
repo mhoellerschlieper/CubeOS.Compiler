@@ -1,0 +1,51 @@
+{*************************************************************
+Environment: CubeOOP
+Title:
+Autor: 
+Date: 29.07.2007 09:47:02
+Description:
+*************************************************************}
+
+Class TList of Base implements
+        Private
+            pNext: Pointer; //
+            pPrev: Pointer;
+            pData: Pointer;
+            iCount: Integer;
+
+            Procedure SetCount(iValue: Integer);
+            begin
+            end;
+
+        Public
+            
+            Count: Integer;
+
+            Procedure TList;
+            begin
+            end;
+            Procedure Add(pValue: Pointer);
+            Begin
+            end;
+            Procedure Delete(iNumber: Integer);
+            begin
+            end;
+            
+            
+end; 
+   
+Class Main of Base implements
+        Private 
+            List: TList;
+            iTest: Double;
+
+            Procedure Main;
+            Begin 
+                iTest := 2;
+                iTest := 5;
+                List := Create(TList);
+                iTest := 198.43;
+                List.pData := 7;
+            End; 
+end;
+

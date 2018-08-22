@@ -1,0 +1,118 @@
+//*************************************************************
+//Environment: CubeOOP
+//Title:
+//Autor: 
+//Date: 22.06.2009 13:18:18
+//Description:
+//*************************************************************
+
+class TItem of Base implements
+      Private
+            
+      Public
+            pNext: TItem;
+            pPrev: TItem;
+            iValue: Int32;
+end;
+//=========================================================================
+//
+//=========================================================================
+
+class TIntList of Base implements
+      Public
+            LastItem: TItem;
+            ActItem: TItem;
+            FirstItem: TItem;
+            //=============================================================
+            // 
+            //=============================================================
+            Procedure Add(iValue: Int32);
+            begin
+              ActItem:= Create(TItem);   
+              ActItem.iValue := iValue;
+              ActItem.pNext  := NIL;
+              
+              if FirstItem = NIL then
+                 begin
+                    FirstItem     := ActItem;
+                    ActItem.pPrev := NIL;
+                 end
+                 else
+                 begin
+                    LastItem.pNext := ActItem;
+                    ActItem.pPrev  := LastItem;  
+                 end;
+              
+              LastItem := ActItem;
+            end;
+            //=============================================================
+            //
+            //=============================================================
+            Function GetValue(L_iIndex: Int32): TItem;
+            var Lidx: int32;
+            begin
+               ActItem := FirstItem;  
+               Result  := nil;
+               
+               Lidx:=0;
+               While Lidx < L_iIndex AND ActItem <> nil do
+               begin
+                    if ActItem <> nil then
+                    begin
+                       ActItem := ActItem.pNext;
+                    end;
+                   Lidx := Lidx + 1; 
+               end; 
+               
+               Result := ActItem;
+            end;
+            //=============================================================
+            //
+            //=============================================================
+            Procedure INI;
+            begin
+                 FirstItem:= NIL;
+                 LastItem := NIL;
+                 ActItem  := NIL;
+            end;
+      end;
+
+//=========================================================================
+//                              MAIN
+//=========================================================================
+Main;
+Var TestList: TIntList;
+    iValue: Int32;
+    iValue32: Int32;
+    iValue16: Int16;
+    Item: TItem;
+Begin 
+     iValue16:= 8*TIntList;
+     
+     writeln(iValue16);
+     TestList:= CREATE(3*TIntList*TItem);
+     Writeln(getallocmem);
+     TestList:= CREATE(8);
+     Writeln(getallocmem);
+  
+     TestList:= CREATE(TIntList);
+     Writeln(getallocmem); 
+     TestList.Ini;
+      
+      for iValue := 0 to 10 do
+      begin
+           TestList.ADD(iValue);
+      end;
+      
+      for iValue := 0 to 10 do
+      begin
+           Item := TestList.GetValue(iValue);
+           
+           if Item <> nil then
+           begin
+               iValue32:=Item.iValue*200;
+               Writeln(iValue32*2);
+           end;
+      end;
+      
+End; // of Maintask

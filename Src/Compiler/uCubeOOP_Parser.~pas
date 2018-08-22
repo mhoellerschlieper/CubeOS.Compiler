@@ -1,0 +1,793 @@
+Unit uCubeOOP_Parser;
+
+Interface
+
+Uses
+  SysUtils,
+  Classes;
+
+Const
+  cBadRemark                  = 1;
+  Lf                          = #10;
+  cr                          = #13;
+  Tab                         = #27;
+
+Type
+  TTokenKind = Type Integer;
+  TOnNewLine = Procedure(sActualLine: String) Of Object;
+
+  TCubeOOPInterpreterParser = Class(TObject)
+  private
+    FSource: String;
+    FPCPos: PChar;                                          { current parse position }
+    Procedure SetSource(Const Value: String);
+    Function GetPos: Integer;
+    Procedure SetPos(Value: Integer);
+  public
+    iLineNumber: Integer;
+    sActualLine: String;
+    OnNewLine: TOnNewLine;
+    { Token - returns next token }
+    Function Token: String;
+    Function NextToken(Var sToken: String): TTokenKind;
+    Procedure Init;
+    Property Source: String read FSource write SetSource;
+    Property PCPos: PChar read FPCPos write FPCPos;
+    Property Pos: Integer read GetPos write SetPos;
+  End;
+
+  TPriorLevel = 0..8;
+
+  { tokenizer }
+
+Function TokenTyp(Const Token: String): TTokenKind;
+{ return operation priority }
+Function Prior(Const TTyp: TTokenKind): TPriorLevel;
+Function TypToken(Const TTyp: TTokenKind): String;
+
+{ Token types }
+Const
+  StIdSymbols                 = ['_', '0'..'9', 'A'..'Z', 'a'..'z'];
+  StIdFirstSymbols            = ['_', 'A'..'Z', 'a'..'z'];
+  StConstSymbols              = ['0'..'9', 'A'..'F', 'a'..'f'];
+  StConstSymbols10            = ['0'..'9'];
+  StSeparators                = ['(', ')', ',', '.', ';'];
+
+  ttUnknown                   = -1;                         { unknown error - internal error in most cases - for debugging }
+  ttEmpty                     = 0;                          { end of file - eof }
+  ttIdentifier                = 10;                         { Identifier }
+  ttInt16                     = 11;                         { Integer constant }
+  ttSingle                    = 12;                         { double constant }
+  ttString                    = 13;                         { string constant }
+  ttBoolean                   = 14;                         { boolean - variable type }
+
+  ttByte                      = 15;                         { boolean - variable type }
+  ttInt32                     = 16;
+  ttChar                      = 17;
+  ttPointer                   = 18;
+  ttU_Int16                   = 19;
+  //================= 20 ist weiter unten reserviert!!!!
+
+  ttLB                        = 40;                         { ( }
+  ttRB                        = 41;                         { ) }
+  ttCol                       = 42;                         { , }
+  ttPoint                     = 43;                         { . }
+  ttColon                     = 44;                         { : }
+  ttSemicolon                 = 45;                         { ; }
+  ttLS                        = 46;                         { [ }
+  ttRS                        = 47;                         { ] }
+  ttDoublePoint               = 48;                         {..}
+  ttDoubleQuote               = 49;                         {"}
+
+  ttFalse                     = 63;                         { false }
+  ttTrue                      = 65;                         { true }
+
+  ttBegin                     = 66;                         { begin }
+  ttEnd                       = 67;                         { end }
+  ttIf                        = 68;                         { if }
+  ttThen                      = 69;                         { then }
+  ttElse                      = 70;                         { else }
+  ttWhile                     = 71;                         { while }
+  ttDo                        = 72;                         { do }
+  ttRepeat                    = 73;                         { repeat }
+  ttUntil                     = 74;                         { until }
+  ttProcedure                 = 75;                         { procedure }
+  ttFunction                  = 76;                         { function }
+  ttFor                       = 77;                         { for }
+  ttTo                        = 78;                         { to }
+  ttBreak                     = 79;                         { break }
+  ttContinue                  = 80;                         { continue }
+  ttVar                       = 81;                         { var }
+  ttTry                       = 82;                         { try }
+  ttFinally                   = 83;                         { finally }
+  ttExcept                    = 84;                         { except }
+  ttOn                        = 85;                         { on }
+  ttRaise                     = 86;                         { raise }
+  ttExternal                  = 87;                         { external }
+  ttUnit                      = 88;                         { unit }
+  ttUses                      = 89;                         { uses }
+  ttConst                     = 90;                         { Const }
+  ttPublic                    = 91;                         { Public }
+  ttPrivate                   = 92;                         { Private }
+  ttProtected                 = 93;                         { Protected }
+  ttPublished                 = 94;                         { Published }
+  ttProperty                  = 95;                         { Property }
+  ttClass                     = 96;                         { Class }
+  ttType                      = 97;                         { Type }
+  ttInterface                 = 98;                         { Interface }
+  ttImplementation            = 99;                         { Implementation }
+  ttExit                      = 100;                        { Exit }
+  ttArray                     = 101;                        { Array }
+  ttOf                        = 102;                        { Of }
+  ttCase                      = 103;                        { Case }
+  ttProgram                   = 104;                        { Program }
+  ttIn                        = 105;                        { In }
+  ttRecord                    = 106;                        { Record }
+  ttDownTo                    = 107;                        { DownTo }
+  ttBase                      = 108;                        { Base }
+  ttImplements                = 109;                        { Implements }
+  ttIs                        = 110;                        { Is }
+  ttCreate                    = 111;                        { Create }
+  ttMain                      = 112;                        { Main }
+
+  ttWrite                     = 113;
+  ttWriteln                   = 114;
+  ttRead                      = 115;
+  ttReadln                    = 116;
+  ttU_Int32                   = 117;
+
+  ttGetAllocMem               = 118;
+  ttNIL                       = 119;
+
+  { priority 8 - highest }
+  ttNot                       = 21;                         { not }
+  { priority 6 }
+  ttMul                       = 22;                         { * }
+  ttDiv                       = 23;                         { / }
+  ttIntDiv                    = 24;                         { div }
+  ttMod                       = 25;                         { mod }
+  { priority 5 }
+  ttAnd                       = 26;                         { and }
+  { priority 4 }
+  ttPlus                      = 27;                         { + }
+  ttMinus                     = 28;                         { - }
+  ttOr                        = 29;                         { or }
+  { priority 3 }
+  ttEqu                       = 30;                         { = }
+  ttGreater                   = 31;                         { > }
+  ttLess                      = 32;                         { < }
+  ttNotEqu                    = 33;                         { <> }
+  { priority 2 }
+  ttEquGreater                = 34;                         { >= }
+  ttEquLess                   = 35;                         { <= }
+  { priority 1 - lowest }
+  { nothing }
+
+  priorNot                    = 8;
+  priorMul                    = 6;
+  priorDiv                    = 6;
+  priorIntDiv                 = 6;
+  priorMod                    = 6;
+  priorAnd                    = 5;
+  priorPlus                   = 4;
+  priorMinus                  = 4;
+  priorOr                     = 4;
+  priorEqu                    = 3;
+  priorGreater                = 3;
+  priorLess                   = 3;
+  priorNotEqu                 = 3;
+  priorEquGreater             = 2;
+  priorEquLess                = 2;
+
+  ttFirstExpression           = 10;                         { tokens for expression }
+  ttLastExpression            = 59;                         {                       }
+
+  { keywords }
+  kwTRUE                      = 'true';
+  kwFALSE                     = 'false';
+  kwOR                        = 'or';
+  kwAND                       = 'and';
+  kwNOT                       = 'not';
+  kwDIV                       = 'div';
+  kwMOD                       = 'mod';
+  kwBEGIN                     = 'begin';
+  kwEND                       = 'end';
+  kwIF                        = 'if';
+  kwTHEN                      = 'then';
+  kwELSE                      = 'else';
+  kwWHILE                     = 'while';
+  kwDO                        = 'do';
+  kwREPEAT                    = 'repeat';
+  kwUNTIL                     = 'until';
+  kwPROCEDURE                 = 'procedure';
+  kwFUNCTION                  = 'function';
+  kwFOR                       = 'for';
+  kwTO                        = 'to';
+  kwBREAK                     = 'break';
+  kwCONTINUE                  = 'continue';
+  kwVAR                       = 'var';
+  kwTRY                       = 'try';
+  kwFINALLY                   = 'finally';
+  kwEXCEPT                    = 'except';
+  kwON                        = 'on';
+  kwRAISE                     = 'raise';
+  kwEXTERNAL                  = 'external';
+  kwUNIT                      = 'unit';
+  kwUSES                      = 'uses';
+  kwCONST                     = 'const';
+  kwPUBLIC                    = 'public';
+  kwPRIVATE                   = 'private';
+  kwPROTECTED                 = 'protected';
+  kwPUBLISHED                 = 'published';
+  kwPROPERTY                  = 'property';
+  kwCLASS                     = 'class';
+  kwTYPE                      = 'type';
+  kwINTERFACE                 = 'interface';
+  kwIMPLEMENTATION            = 'implementation';
+  kwEXIT                      = 'exit';
+  kwARRAY                     = 'array';
+  kwOF                        = 'of';
+  kwCASE                      = 'case';
+  kwPROGRAM                   = 'program';
+  kwIN                        = 'in';
+  kwRECORD                    = 'record';
+  kwDOWNTO                    = 'downto';
+  kwNIL                       = 'nil';
+  kwBase                      = 'base';
+  kwImplements                = 'implements';
+  kwIS                        = 'is';
+  kwCreate                    = 'create';
+
+  kwBoolean                   = 'boolean';
+  kwByte                      = 'byte';
+  kwInt16                     = 'int16';
+  kwInt32                     = 'int32';
+  kwU_int16                   = 'u_Int16';
+  kwU_int32                   = 'u_Int32';
+
+  kwChar                      = 'char';
+  kwPointer                   = 'pointer';
+
+  kwSingle                    = 'single';
+  kwString                    = 'string';
+  kwMain                      = 'main';
+
+  kwWrite                     = 'write';
+  kwWriteln                   = 'writeln';
+  kwRead                      = 'read';
+  kwReadln                    = 'readln';
+  kwGetAllocMem               = 'getallocmem';
+
+  { directives }
+  drNAME                      = 'name';
+  drINDEX                     = 'index';
+
+Implementation
+
+Const
+  K                           = '''';
+
+  {*********************** tokenizer ***********************}
+  { modified algorithm from mozilla source }
+
+Type
+  TTokenTag = Record
+    // (rom) changed to PChar to get rid of hidden initialization section
+    Token: PChar;
+    TTyp: TTokenKind;
+  End;
+
+Const
+  P_UNKNOWN                   = -1;
+  MIN_WORD_LENGTH             = 2;
+  MAX_WORD_LENGTH             = 14;                         { = length('implementation') }
+
+  AssoIndices                 : Array[0..175] Of Integer = (
+    {      0   1   2   3   4   5   6   7   8   9 }
+    {00}35, 28, 4, 32, 19, 6, 7, 25, 28, 7,
+    {10}3, 32, 20, 25, 5, 36, 10, 4, 44, 9,
+    {20}39, 37, 37, 40, 2, 34, 19, 19, 40, 0,
+    {30}20, 2, 26, 14, 40, 28, 44, 14, 28, 1,
+    {40}21, 32, 20, 0, 9, 40, 44, 32, 31, 3,
+    {50}27, 20, 21, 39, 41, 13, 11, 36, 26, 31,
+    {60}24, 14, 33, 2, 43, 44, 39, 4, 34, 18,
+    {70}9, 22, 40, 30, 2, 41, 39, 22, 12, 20,
+    {80}26, 18, 4, 15, 9, 19, 3, 12, 10, 28,
+    {90}29, 32, 8, 33, 22, 42, 27, 14, 3, 36,
+    {100}11, 0, 32, 26, 30, 26, 15, 7, 32, 14,
+    {110}16, 24, 12, 16, 29, 16, 28, 28, 31, 4,
+    {120}14, 4, 0, 34, 2, 19, 20, 32, 4, 31,
+    {130}18, 28, 25, 10, 27, 33, 6, 9, 4, 1,
+    {140}13, 10, 35, 38, 4, 43, 15, 11, 43, 3,
+    {150}33, 43, 11, 19, 15, 33, 19, 27, 17, 30,
+    {160}44, 12, 26, 24, 25, 31, 38, 15, 0, 27,
+    {170}19, 22, 14, 10, 4, 30);
+
+  AssoValues                  : Array[0..176] Of Integer = (
+    {      0   1   2   3   4   5   6   7   8   9 }
+    {00}-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    {10}-1, -1, -1, -1, -1, 2, -1, -1, -1, 43,
+    {20}23, 19, 18, -1, -1, -1, -1, -1, -1, -1,
+    {30}-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    {40}-1, -1, 9, -1, 13, -1, -1, -1, 31, -1,
+    {50}42, 4, -1, -1, -1, 36, -1, 26, -1, 20,
+    {60}-1, 21, -1, -1, -1, 47, -1, -1, 24, -1,
+    {70}38, -1, 45, 16, 14, 0, -1, -1, 25, -1,
+    {80}46, -1, 10, 22, 7, 48, 34, -1, -1, -1,
+    {90}39, 27, 6, -1, 33, -1, -1, 1, -1, -1,
+    {100}41, -1, -1, 17, -1, 29, 44, -1, 28, -1,
+    {110}15, 8, -1, 32, 12, -1, -1, -1, 11, -1,
+    {120}37, -1, -1, 40, -1, -1, -1, 3, -1, -1,
+    {130}-1, -1, -1, -1, -1, -1, -1, 5, -1, -1,
+    {140}-1, -1, -1, -1, 35, -1, -1, -1, -1, -1,
+    {150}30, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    {160}-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    {170}-1, -1, -1, -1, -1, -1, -1);
+
+  WordList                    : Array[0..69] Of TTokenTag = (
+    (Token: kwTRUE; TTyp: ttTrue),
+    (Token: kwFALSE; TTyp: ttFalse),
+    (Token: kwOR; TTyp: ttOr),
+    (Token: kwAND; TTyp: ttAnd),
+    (Token: kwNOT; TTyp: ttNot),
+    (Token: kwDIV; TTyp: ttIntDiv),
+    (Token: kwMOD; TTyp: ttMod),
+    (Token: kwBEGIN; TTyp: ttBegin),
+    (Token: kwEND; TTyp: ttEnd),
+    (Token: kwIF; TTyp: ttIf),
+    (Token: kwTHEN; TTyp: ttThen),
+    (Token: kwELSE; TTyp: ttElse),
+    (Token: kwWHILE; TTyp: ttWhile),
+    (Token: kwDO; TTyp: ttDo),
+    (Token: kwREPEAT; TTyp: ttRepeat),
+    (Token: kwUNTIL; TTyp: ttUntil),
+    (Token: kwPROCEDURE; TTyp: ttProcedure),
+    (Token: kwFUNCTION; TTyp: ttFunction),
+    (Token: kwFOR; TTyp: ttFor),
+    (Token: kwTO; TTyp: ttTo),
+    (Token: kwBREAK; TTyp: ttBreak),
+    (Token: kwCONTINUE; TTyp: ttContinue),
+    (Token: kwVAR; TTyp: ttVar),
+    (Token: kwTRY; TTyp: ttTry),
+    (Token: kwFINALLY; TTyp: ttFinally),
+    (Token: kwEXCEPT; TTyp: ttExcept),
+    (Token: kwON; TTyp: ttOn),
+    (Token: kwRAISE; TTyp: ttRaise),
+    (Token: kwEXTERNAL; TTyp: ttExternal),
+    (Token: kwUNIT; TTyp: ttUnit),
+    (Token: kwUSES; TTyp: ttUses),
+    (Token: kwCONST; TTyp: ttConst),
+    (Token: kwPUBLIC; TTyp: ttPublic),
+    (Token: kwPRIVATE; TTyp: ttPrivate),
+    (Token: kwPROTECTED; TTyp: ttProtected),
+    (Token: kwPUBLISHED; TTyp: ttPublished),
+    (Token: kwPROPERTY; TTyp: ttProperty),
+    (Token: kwCLASS; TTyp: ttClass),
+    (Token: kwTYPE; TTyp: ttType),
+    (Token: kwINTERFACE; TTyp: ttInterface),
+    (Token: kwIMPLEMENTATION; TTyp: ttImplementation),
+    (Token: kwEXIT; TTyp: ttExit),
+    (Token: kwARRAY; TTyp: ttArray),
+    (Token: kwOF; TTyp: ttOf),
+    (Token: kwCASE; TTyp: ttCase),
+    (Token: kwPROGRAM; TTyp: ttProgram),
+    (Token: kwIN; TTyp: ttIn),
+    (Token: kwRECORD; TTyp: ttRecord),
+    (Token: kwDOWNTO; TTyp: ttDownTo),
+    (Token: kwBase; TTyp: ttBase),
+    (Token: kwImplements; TTyp: ttImplements),
+    (Token: kwIs; TTyp: ttIs),
+    (Token: kwCreate; TTyp: ttCreate),
+    (Token: kwMain; TTyp: ttMain),
+
+    (Token: kwWrite; TTyp: ttWrite),
+    (Token: kwWriteln; TTyp: ttWriteln),
+    (Token: kwRead; TTyp: ttRead),
+    (Token: kwReadln; TTyp: ttReadln),
+
+    (Token: kwBoolean; TTyp: ttBoolean),
+    (Token: kwByte; TTyp: ttByte),
+    (Token: kwInt16; TTyp: ttInt16),
+    (Token: kwInt32; TTyp: ttInt32),
+    (Token: kwChar; TTyp: ttChar),
+    (Token: kwPointer; TTyp: ttPointer),
+    (Token: kwU_int16; TTyp: ttU_Int16),
+    (Token: kwU_int32; TTyp: ttU_Int32),
+    (Token: kwSingle; TTyp: ttSingle),
+    (Token: kwString; TTyp: ttString),
+    (Token: kwGetAllocMem; TTyp: ttGetAllocMem),
+    (Token: kwNIL; TTyp: ttNIL)
+    );
+
+Function Cmp(Const S1, S2: String): Boolean;
+Begin
+  // Direct call to CompareString is faster than AnsiCompareText.
+  Result := (Length(S1) = Length(S2))
+    And
+    (Lowercase(S1) = Lowercase(s2))
+    {And
+(CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE, PChar(S1),
+-1, PChar(S2), -1) = 2);}
+End;
+
+Procedure Call_Error(iErrNo: Integer; sErrTxt: Integer);
+Begin
+End;
+
+{ convert string into token number using hash tables }
+
+Function PaTokenizeTag(Const TokenStr: String): TTokenKind;
+Var
+  Len                         : Integer;
+  HVal                        : Integer;
+Begin
+  Result := P_UNKNOWN;
+  HVal := -1;
+  Len := Length(WordList);
+
+  For HVal := 0 To Len - 1 Do
+  Begin
+    If Lowercase(WordList[HVal].Token) = Lowercase(TokenStr) Then
+    Begin
+      Result := WordList[HVal].TTyp;
+      Break;
+    End;
+  End;
+End;
+
+Const
+  { !"#$%&'()*+,-./0123456789:;<=>? }
+  Asso1Values                 : Array[' '..'?'] Of Integer =
+    (-1, -1, -1, -1, -1, -1, -1, -1,
+    ttLB, ttRB, ttMul, ttPlus, ttCol, ttMinus, ttPoint, ttDiv,
+    ttInt16, ttInt16, ttInt16, ttInt16, ttInt16,
+    ttInt16, ttInt16, ttInt16, ttInt16, ttInt16,
+    ttColon, ttSemicolon, ttLess, ttEqu, ttGreater, -1);
+
+  {######################## tokenizer ########################}
+
+Function TokenTyp(Const Token: String): TTokenKind;
+Var
+  I                           : Integer;
+  L1                          : Integer;
+  T1                          : Char;
+  Ci                          : Char;
+  Point                       : Boolean;
+Label                                                       { Sorry about labels and gotos - for speed-ups only }
+  Any, NotNumber;
+Begin
+  L1 := Length(Token);
+  If L1 = 0 Then
+  Begin
+    Result := ttEmpty;
+    Exit;
+  End;
+  T1 := Token[1];
+  If L1 = 1 Then
+  Begin
+    { Result := pa_tokenize_1tag(Token[1]);
+    if Result = -1 then goto Any; }
+    If T1 In ['('..'>'] Then                                { #40..#62 }
+      Result := Asso1Values[T1]
+    Else
+      If T1 = '[' Then
+        Result := ttLS
+      Else
+        If T1 = ']' Then
+          Result := ttRS
+        Else
+          If T1 = '"' Then
+            Result := ttDoubleQuote
+          Else
+            Goto Any;
+  End
+  Else
+    Case T1 Of
+      '.':
+        { may be '..' }
+        Begin
+          If Token[2] = '.' Then
+            Result := ttDoublePoint
+          Else
+            Goto Any;
+        End;
+      '$':
+        { may be hex constant }
+        Begin
+          For I := 2 To L1 Do
+            If Not (Token[I] In StConstSymbols) Then
+              Goto Any;
+          Result := ttInt16;
+        End;
+      '<':
+        If L1 = 2 Then
+          Case Token[2] Of
+            '=': Result := ttEquLess;
+            '>': Result := ttNotEqu;
+          Else
+            Goto Any;
+          End
+        Else
+          Goto Any;
+      '>':
+        If (L1 = 2) And (Token[2] = '=') Then
+          Result := ttEquGreater
+        Else
+          Goto Any;
+    Else
+      Begin
+        Any:                                                { !!LABEL!! }
+
+        Point := False;
+        For I := 1 To L1 Do
+        Begin
+          Ci := Token[I];
+          If Ci = '.' Then
+            If Point Then
+              Goto NotNumber                                {two Points in lexem}
+            Else
+              Point := True
+          Else
+            If Not (Ci In StConstSymbols10) Then
+              Goto NotNumber                                { not number }
+        End;
+        If Point Then
+          Result := ttFloat
+        Else
+        Begin
+          If abs(StrToInt(Token)) > 32767 Then
+            Result := ttInt32
+          Else
+            Result := ttInt16;
+        End;
+        Exit;
+
+        NotNumber:
+
+        If (L1 >= 2) And (Token[1] = '''') And (Token[L1] = '''') Then
+          Result := ttString
+        Else
+        Begin
+          // keywords
+          Result := PaTokenizeTag(Token);
+
+          If Result <> -1 Then
+          Begin
+          End
+          Else
+            If Not (T1 In StIdFirstSymbols) Then
+              Result := ttUnknown
+            Else
+            Begin
+              For I := 2 To L1 Do
+                If Not (Token[I] In StIdSymbols) Then
+                Begin
+                  Result := ttUnknown;
+                  Exit;
+                End;
+              Result := ttIdentifier;
+            End;
+        End;
+      End;
+    End;
+End;
+
+Function TypToken(Const TTyp: TTokenKind): String;
+Begin
+  Result := '?? not implemented !!';                        { DEBUG !! }
+End;
+
+Function Prior(Const TTyp: TTokenKind): TPriorLevel;
+Const
+  Priors                      : Array[ttNot..ttEquLess] Of TPriorLevel =
+    (priorNot, priorMul, priorDiv, priorIntDiv, priorMod, priorAnd, priorPlus,
+    priorMinus, priorOr, priorEqu, priorGreater, priorLess,
+    priorNotEqu, priorEquGreater, priorEquLess);
+Begin
+  If TTyp In [ttNot..ttEquLess] Then
+    Result := Priors[TTyp]
+  Else
+    Result := 0;
+End;
+
+//=== { TCubeOOPInterpreterParser } ===============================================
+
+Procedure TCubeOOPInterpreterParser.SetSource(Const Value: String);
+Begin
+  FSource := Value;
+  Init;
+End;
+
+Procedure TCubeOOPInterpreterParser.Init;
+Begin
+  FPCPos := PChar(FSource);
+  iLineNumber := 1;
+End;
+
+Function TCubeOOPInterpreterParser.Token: String;
+Var
+  P, F                        : PChar;
+  F1                          : PChar;
+  I                           : Integer;
+  //  PointCount: Integer;
+
+  Procedure Skip;
+  Begin
+    Case P[0] Of
+      '{':
+        Begin
+          While Not (P[0] In ['}', #0]) Do
+          Begin
+            Inc(P);
+
+            If P[0] = Cr Then
+              inc(iLineNumber);
+          End;
+          Inc(P);
+          If F = Nil Then
+            Call_Error(cBadRemark, P - PChar(FSource));
+
+        End;
+      '}':
+        Call_Error(cBadRemark, P - PChar(FSource));
+
+      '/':
+        If (P[1] = '/') Then
+          While Not (P[0] In [Lf, Cr, #0]) Do
+            Inc(P);
+    End;
+
+    While (P[0] In [' ', Lf, Cr, Tab]) Do
+    Begin
+
+      If P[0] = Cr Then
+      Begin
+        inc(iLineNumber);
+
+        sActualLine := StrPas(p + 1);
+        sActualLine := copy(sActualLine, 1, System.pos(#13, sActualLine));
+
+        If Assigned(OnNewLine) Then
+          OnNewLine(sActualLine);
+      End;
+      Inc(P);
+    End;
+  End;
+
+Begin
+  { New Token }
+  F := FPCPos;
+  P := FPCPos;
+  { Firstly skip spaces and remarks }
+  Repeat
+    F1 := P;
+    Skip;
+  Until F1 = P;
+  F := P;
+
+  If P[0] In StIdFirstSymbols Then
+    { token }
+  Begin
+    While P[0] In StIdSymbols Do
+      Inc(P);
+    SetString(Result, F, P - F);
+  End
+  Else
+    If P[0] In StConstSymbols10 Then
+      { number }
+    Begin
+      While (P[0] In StConstSymbols10) Or (P[0] = '.') Do
+      Begin
+        If (P[0] = '.') And (P[1] = '.') Then
+          Break;
+        Inc(P);
+      End;
+      SetString(Result, F, P - F);
+    End
+    Else
+      If ((P[0] = '$') And
+        (P[1] In StConstSymbols)) Then
+        { hex number }
+      Begin
+        Inc(P);
+        While P[0] In StConstSymbols Do
+          Inc(P);
+        SetString(Result, F, P - F);
+      End
+      Else
+        If P[0] = '''' Then
+          { string constant }
+        Begin
+          Inc(P);
+          While P[0] <> #0 Do
+          Begin
+            If P[0] = '''' Then
+              If P[1] = '''' Then
+                Inc(P)
+              Else
+                Break;
+            Inc(P);
+          End;
+          Inc(P);
+          SetString(Result, F, P - F);
+          I := 2;
+          While I < Length(Result) - 1 Do
+          Begin
+            If Result[I] = '''' Then
+              Delete(Result, I, 1);
+            Inc(I);
+          End;
+        End
+        Else
+          If ((P[0] = '#') And
+            (P[1] In StConstSymbols10)) Then
+            { Char constant }
+          Begin
+            Inc(P);
+            While P[0] In StConstSymbols10 Do
+              Inc(P);
+            SetString(Result, F + 1, P - F - 1);
+            Result := '''' + Chr(StrToInt(Result)) + '''';
+          End
+          Else
+            If P[0] In ['>', '=', '<', '.'] Then
+            Begin
+              If (P[0] = '.') And (P[1] = '.') Then
+              Begin
+                Result := '..';
+                Inc(P, 2);
+              End
+              Else
+                If (P[0] = '>') And (P[1] = '=') Then
+                Begin
+                  Result := '>=';
+                  Inc(P, 2);
+                End
+                Else
+                  If (P[0] = '<') And (P[1] = '=') Then
+                  Begin
+                    Result := '<=';
+                    Inc(P, 2);
+                  End
+                  Else
+                    If (P[0] = '<') And (P[1] = '>') Then
+                    Begin
+                      Result := '<>';
+                      Inc(P, 2);
+                    End
+                    Else
+                    Begin
+                      Result := P[0];
+                      Inc(P);
+                    End;
+            End
+            Else
+              If P[0] = #0 Then
+                Result := ''
+              Else
+              Begin
+                Result := P[0];
+                Inc(P);
+              End;
+
+  FPCPos := P;
+End;
+
+Function TCubeOOPInterpreterParser.GetPos: Integer;
+Begin
+  Result := FPCPos - PChar(FSource);
+End;
+
+Procedure TCubeOOPInterpreterParser.SetPos(Value: Integer);
+Begin
+  FPCPos := PChar(FSource) + Value;
+End;
+
+Function TCubeOOPInterpreterParser.NextToken(Var sToken: String): TTokenKind;
+Begin
+  sToken := Token;
+  Result := TokenTyp(sToken);
+End;
+
+End.
+
