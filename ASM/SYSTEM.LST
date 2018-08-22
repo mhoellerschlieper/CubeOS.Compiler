@@ -1,0 +1,2124 @@
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 1
+SYSTEM.ASM
+
+      1
+      2
+      3
+      4
+      5
+      6
+      7
+      8
+      9
+     10
+     11                              public scrmode,scrseg,winypos,winxpos
+     12                              public height, widthv,actx,acty,winattr
+     13                              public curflag,wselect,windows,keyflag
+     14                              public bufadr,insert,strbuf,bufpos
+     15                              public anzkeys,posxy,sysstr,outflag
+     16                              public delflag,basis,negflag,scrupflag
+     17                              public detectscr,initscr,clrscr,clreol
+     18                              public delline,insline,setcolor
+     19                              public getcolor,defwindow,askwindow
+     20                              public selwindow,putframe,delframe
+     21                              public scrollup,scrolldn,scrolllf
+     22                              public scrollrg,gotoxy,getxy,print
+     23                              public convstring,readkey,flush,input
+     24                              public deletestr,insertstr,copystr
+     25                              public concatstr,posstr,upstr,ignchar
+     26                              public cutchar,partostr,dadd,dsub
+     27                              public dmul,ddiv,dneg,numtostr
+     28                              public strtonum
+     29
+     30
+     31 0000                         Data segment word public
+     32
+     33
+     34
+     35 0000  00                     scrmode  db 00h
+     36 0001  ????                   scrseg   dw ?
+     37 0003  00                     winypos  db 0
+     38 0004  00                     winxpos  db 0
+     39 0005  19                     height   db 25
+     40 0006  50                     widthv   db 80
+     41 0007  01                     acty     db 1
+     42 0008  01                     actx     db 1
+     43 0009  07                     winattr  db 7
+     44 000A  00                     curflag  db 0
+     45 000B  00                     wselect  db 0
+     46 000C  40*(??)                windows  db 40h dup (?)
+     47 004C  ??                     keyflag  db ?
+     48 004D  ????                   bufadr   dw ?
+     49 004F  ??                     insert   db ?
+     50 0050  0104*(??)              strbuf   db 260 dup (?)
+     51 0154  ??                     bufpos   db ?
+     52 0155  ????                   anzkeys  dw ?
+     53 0157  ????                   posxy    dw ?
+     54 0159  01 01 ??               sysstr   db 1,1,?
+     55 015C  ??                     outflag  db ?
+     56 015D  ??                     delflag  db ?
+     57 015E  0A                     basis    db 10
+     58 015F  ??                     negflag  db ?
+     59 0160  ??                     scrupflag db ?
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 2
+SYSTEM.ASM
+
+     60
+     61 0161                         data ends
+     62
+     63 0000                         code segment byte public
+     64                                   assume cs:code, ds:data
+     65
+     66 0000                         detectscr proc near
+     67 0000  51                               push cx
+     68 0001  06                               push es
+     69 0002  33 C9                            xor cx,cx
+     70 0004  8E C1                            mov es,cx
+     71 0006  26: 8B 0E 0463                   mov cx,es:[0463h]
+     72 000B  81 F9 03D4                       cmp cx,03d4h
+     73 000F  07                               pop es
+     74 0010  59                               pop cx
+     75 0011  74 0E                            jz color
+     76 0013  C6 06 0000r 07         mono :   mov byte ptr scrmode,7
+     77 0018  C7 06 0001r B000                mov scrseg,0B000h
+     78 001E  32 C0                           xor al,al
+     79 0020  C3                              ret
+     80 0021  C6 06 0000r 03         color:   mov byte ptr scrmode,3
+     81 0026  C7 06 0001r B800                mov scrseg,0B800h
+     82 002C  B0 01                           mov al,1
+     83 002E  C3                              ret
+     84 002F                         detectscr endp
+     85
+     86 002F                         initscr proc near
+     87 002F  A0 0000r                        mov al,byte ptr scrmode
+     88 0032  0A C0                           or al,al
+     89 0034  75 01                           jnz modeok
+     90 0036  C3                              ret
+     91 0037  32 E4                  modeok: xor ah,ah
+     92 0039  CD 10                           int 10h
+     93 003B  BE 000Cr                        mov si,offset windows
+     94 003E  BF 0014r                        mov di,offset windows+8
+     95 0041  C7 04 0000                      mov word ptr[si],0
+     96 0045  C7 44 02 5019                   mov word ptr[si+2],5019h
+     97 004A  C7 44 04 0000                   mov word ptr[si+4],0
+     98 004F  C7 44 06 0007                   mov word ptr[si+6],7
+     99 0054  9C                              pushf
+    100 0055  06                              push es
+    101 0056  FC                              cld
+    102 0057  1E                              push ds
+    103 0058  07                              pop es
+    104 0059  B9 001C                         mov cx,1ch
+    105 005C  F3> A5                          rep movsw
+    106 005E  07                              pop es
+    107 005F  9D                              popf
+    108 0060  C6 06 000Br 00                  mov wselect,0
+    109 0065  E9 0B11                         jmp selectwin
+    110 0068                         initscr endp
+    111
+    112 0068                         clrscr proc near
+    113 0068  9C                              pushf
+    114 0069  06                              push es
+    115 006A  8B 16 0003r                     mov dx,word ptr winypos
+    116 006E  E8 0AAB                         call berechnexy
+    117 0071  8A 26 0009r                     mov ah,winattr
+    118 0075  FC                              cld
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 3
+SYSTEM.ASM
+
+    119 0076  8B 0E 0005r                     mov cx, word ptr height
+    120 007A  86 E9                           xchg CH,cl
+    121 007C  51                     clrloop: push cx
+    122 007D  57                              push di
+    123 007E  32 ED                           xor CH,CH
+    124 0080  F3> AB                          rep stosw
+    125 0082  5F                              pop di
+    126 0083  59                              pop cx
+    127 0084  81 C7 00A0                      add di,0a0h
+    128 0088  FE CD                           dec CH
+    129 008A  75 F0                           jnz clrloop
+    130 008C  07                              pop es
+    131 008D  9D                              popf
+    132 008E  C7 06 0007r 0000                mov word ptr acty,0
+    133 0094  E9 0AFF                         jmp setcursor
+    134 0097                         clrscr endp
+    135
+    136 0097                         clreol proc near
+    137 0097  9C                              pushf
+    138 0098  06                              push es
+    139 0099  8B 16 0007r                     mov dx,word ptr acty
+    140 009D  03 16 0003r                     add dx,word ptr winypos
+    141 00A1  E8 0A78                         call berechnexy
+    142 00A4  8A 0E 0006r                     mov cl,widthv
+    143 00A8  2A 0E 0008r                     sub cl,actx
+    144 00AC  32 ED                           xor CH,CH
+    145 00AE  B0 20                           mov al,20h
+    146 00B0  8A 26 0009r                     mov ah,winattr
+    147 00B4  FC                              cld
+    148 00B5  F3> AB                          rep stosw
+    149 00B7  07                              pop es
+    150 00B8  9D                              popf
+    151 00B9  C3                              ret
+    152 00BA                         clreol endp
+    153
+    154 00BA                         delline proc near
+    155 00BA  9C                              pushf
+    156 00BB  06                              push es
+    157 00BC  FC                              cld
+    158 00BD  8B 16 0003r                     mov dx, word ptr winypos
+    159 00C1  02 16 0007r                     add dl,acty
+    160 00C5  E8 0A54                         call berechnexy
+    161 00C8  A0 0007r                        mov al,acty
+    162 00CB  FE C0                           inc al
+    163 00CD  3A 06 0005r                     cmp al,height
+    164 00D1  74 2C                           jz lastline
+    165 00D3  8B F7                           mov si,di
+    166 00D5  81 C6 00A0                      add si,0a0h
+    167 00D9  8B 0E 0005r                     mov cx,word ptr height
+    168 00DD  86 E9                           xchg CH,cl
+    169 00DF  FE CD                           dec CH
+    170 00E1  2A 2E 0007r                     sub CH,acty
+    171 00E5  1E                              push ds
+    172 00E6  06                              push es
+    173 00E7  1F                              pop ds
+    174 00E8  51                     delloop: push cx
+    175 00E9  56                              push si
+    176 00EA  57                              push di
+    177 00EB  32 ED                           xor CH,CH
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 4
+SYSTEM.ASM
+
+    178 00ED  F3> A5                          rep movsw
+    179 00EF  5F                              pop di
+    180 00F0  81 C7 00A0                      add di,0a0h
+    181 00F4  5E                              pop si
+    182 00F5  81 C6 00A0                      add si,0a0h
+    183 00F9  59                              pop cx
+    184 00FA  FE CD                           dec CH
+    185 00FC  75 EA                           jnz delloop
+    186 00FE  1F                              pop ds
+    187 00FF                         lastline label near
+    188 00FF  8A 0E 0006r                     mov cl,widthv
+    189 0103  32 ED                           xor CH,CH
+    190 0105  B0 20                           mov al,20h
+    191 0107  8A 26 0009r                     mov ah,winattr
+    192 010B  FC                              cld
+    193 010C  F3> AB                          rep stosw
+    194 010E  07                              pop es
+    195 010F  9D                              popf
+    196 0110  C3                              ret
+    197 0111                         delline endp
+    198
+    199 0111                         insline proc near
+    200 0111  9C                              pushf
+    201 0112  06                              push es
+    202 0113  FC                              cld
+    203 0114  8B 16 0004r                     mov dx, word ptr winxpos
+    204 0118  02 16 0007r                     add dl,acty
+    205 011C  E8 09FD                         call berechnexy
+    206 011F  A0 0007r                        mov al,acty
+    207 0122  FE C0                           inc al
+    208 0124  3A 06 0005r                     cmp al,height
+    209 0128  74 D5                           jz lastline
+    210 012A  57                              push di
+    211 012B  8B 16 0003r                     mov dx,word ptr winypos
+    212 012F  02 06 0005r                     add al,height
+    213 0133  FE CA                           dec dl
+    214 0135  E8 09E4                         call berechnexy
+    215 0138  8B F7                           mov si,di
+    216 013A  81 EE 00A0                      sub si,0a0h
+    217 013E  8B 0E 0005r                     mov cx,word ptr height
+    218 0142  86 E9                           xchg CH,cl
+    219 0144  FE CD                           dec CH
+    220 0146  2A 2E 0007r                     sub CH,acty
+    221 014A  1E                              push ds
+    222 014B  06                              push es
+    223 014C  1F                              pop ds
+    224 014D  51                     insloop: push cx
+    225 014E  56                              push si
+    226 014F  57                              push di
+    227 0150  32 ED                           xor CH,CH
+    228 0152  F3> A5                          rep movsw
+    229 0154  5F                              pop di
+    230 0155  81 EF 00A0                      sub di,0a0h
+    231 0159  5E                              pop si
+    232 015A  81 EE 00A0                      sub si,0a0h
+    233 015E  59                              pop cx
+    234 015F  FE CD                           dec CH
+    235 0161  75 EA                           jnz insloop
+    236 0163  1F                              pop ds
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 5
+SYSTEM.ASM
+
+    237 0164  5F                              pop di
+    238 0165  EB 98                           jmp lastline
+    239 0167                         insline endp
+    240
+    241 0167                         setcolor proc near
+    242 0167  A2 0009r                        mov winattr,al
+    243 016A  C3                              ret
+    244 016B                         setcolor endp
+    245
+    246 016B                         getcolor proc near
+    247 016B  A0 0009r                        mov al,winattr
+    248 016E  C3                              ret
+    249 016F                         getcolor endp
+    250
+    251 016F                         defwindow proc near
+    252 016F  0A E4                           or ah,ah
+    253 0171  75 02                           jnz defw1
+    254 0173  F9                     exitdefw:stc
+    255 0174  C3                              ret
+    256 0175  0A ED                  defw1:   or CH,CH
+    257 0177  74 FA                           jz exitdefw
+    258 0179  0A C9                           or cl,cl
+    259 017B  74 F6                           jz exitdefw
+    260 017D  80 FE 4F                        cmp dh,4fh
+    261 0180  77 F1                           ja exitdefw
+    262 0182  80 FA 18                        cmp dl,18h
+    263 0185  77 EC                           ja exitdefw
+    264 0187  8B FA                           mov di,dx
+    265 0189  02 F5                           add dh,CH
+    266 018B  02 D1                           add dl,cl
+    267 018D  FE CE                           dec dh
+    268 018F  FE CA                           dec dl
+    269 0191  80 FE 4F                        cmp dh,4fh
+    270 0194  77 DD                           ja exitdefw
+    271 0196  80 FA 18                        cmp dl,18h
+    272 0199  77 D8                           ja exitdefw
+    273 019B  8B D7                           mov dx,di
+    274 019D  80 E4 07                        and ah,7
+    275 01A0  50                              push ax
+    276 01A1  8A DC                           mov bl,ah
+    277 01A3  32 FF                           xor bh,bh
+    278 01A5  D1 E3                           shl bx,1
+    279 01A7  D1 E3                           shl bx,1
+    280 01A9  D1 E3                           shl bx,1
+    281 01AB  81 C3 000Cr                     add bx,offset windows
+    282 01AF  58                              pop ax
+    283 01B0  89 17                           mov [bx],dx
+    284 01B2  89 4F 02                        mov [bx+2],cx
+    285 01B5  C7 47 04 0000                   mov word ptr [bx+4],0
+    286 01BA  88 47 06                        mov [bx+6],al
+    287 01BD  C6 47 07 00                     mov byte ptr [bx+7],0
+    288 01C1  3A 26 000Br                     cmp ah,wselect
+    289 01C5  74 02                           jz selectnew
+    290 01C7  F8                              clc
+    291 01C8  C3                              ret
+    292 01C9  E8 09AD                selectnew:call selectwin
+    293 01CC  F8                              clc
+    294 01CD  C3                              ret
+    295 01CE                         defwindow endp
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 6
+SYSTEM.ASM
+
+    296
+    297 01CE                         askwindow proc near
+    298 01CE  80 E4 07                        and ah,7
+    299 01D1  8A DC                           mov bl,ah
+    300 01D3  32 FF                           xor bh,bh
+    301 01D5  B1 03                           mov cl,3
+    302 01D7  D3 E3                           shl bx,cl
+    303 01D9  81 C3 000Cr                     add bx,offset windows
+    304 01DD  8B 17                           mov dx,word ptr [bx]
+    305 01DF  8B 4F 02                        mov cx,word ptr [bx+2]
+    306 01E2  8A 47 06                        mov al,byte ptr [bx+6]
+    307 01E5  C3                              ret
+    308 01E6                         askwindow endp
+    309
+    310 01E6                         selwindow proc near
+    311 01E6  80 E4 07                        and ah,7
+    312 01E9  88 26 000Br                     mov wselect,ah
+    313 01ED  E9 0989                         jmp selectwin
+    314 01F0                         selwindow endp
+    315
+    316 01F0                         putframe proc near
+    317 01F0  80 7C 05 01                     cmp byte ptr [si+5],1
+    318 01F4  74 01                           jz frameok
+    319 01F6  C3                              ret
+    320 01F7  E8 09F2                frameok: call saveback
+    321 01FA  C6 44 05 00                     mov byte ptr [si+5],0
+    322 01FE  8B 14                           mov dx,word ptr [si]
+    323 0200  86 F2                           xchg dh,dl
+    324 0202  9C                              pushf
+    325 0203  06                              push es
+    326 0204  FC                              cld
+    327 0205  E8 0914                         call berechnexy
+    328 0208  8B 4C 02                        mov cx, word ptr [si+2]
+    329 020B  86 E9                           xchg CH,cl
+    330 020D  8A 64 04                        mov ah,byte ptr [si+4]
+    331 0210  56                              push si
+    332 0211  8B 74 06                        mov si,word ptr[si+6]
+    333 0214  51                     frloop:  push cx
+    334 0215  57                              push di
+    335 0216  32 ED                           xor CH,CH
+    336 0218  AC                     frloop1: lodsb
+    337 0219  0A C0                           or al,al
+    338 021B  74 19                           jz spezial1
+    339 021D  3C 01                           cmp al,1
+    340 021F  74 1A                           jz spezial2
+    341 0221  3C 02                           cmp al,2
+    342 0223  74 1B                           jz spezial3
+    343 0225  AB                              stosw
+    344 0226  E2 F0                  contfr:  loop frloop1
+    345 0228  5F                              pop di
+    346 0229  81 C7 00A0                      add di,0a0h
+    347 022D  59                              pop cx
+    348 022E  FE CD                           dec CH
+    349 0230  75 E2                           jnz frloop
+    350 0232  5E                              pop si
+    351 0233  07                              pop es
+    352 0234  9D                              popf
+    353 0235  C3                              ret
+    354 0236  AC                     spezial1:lodsb
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 7
+SYSTEM.ASM
+
+    355 0237  8A E0                           mov ah,al
+    356 0239  EB DD                           jmp frloop1
+    357 023B  83 C7 02               spezial2:add di,2
+    358 023E  EB E6                           jmp short contfr
+    359 0240  26: 80 65 01 07        spezial3:and byte ptr es:[di+1],7
+    360 0245  EB F4                           jmp short spezial2
+    361 0247                         putframe endp
+    362
+    363 0247                         delframe proc near
+    364 0247  80 7C 05 00                     cmp byte ptr [si+5],0
+    365 024B  74 01                           jz delfrok
+    366 024D  C3                              ret
+    367 024E  C6 44 05 01            delfrok: mov byte ptr [si+5],1
+    368 0252  8B 14                           mov dx,word ptr [si]
+    369 0254  86 F2                           xchg dh,dl
+    370 0256  9C                              pushf
+    371 0257  06                              push es
+    372 0258  FC                              cld
+    373 0259  E8 08C0                         call berechnexy
+    374 025C  8B 4C 02                        mov cx,word ptr [si+2]
+    375 025F  86 E9                           xchg CH,cl
+    376 0261  8B 74 08                        mov si,word ptr [si+8]
+    377 0264  51                     delfrloop:push cx
+    378 0265  57                              push di
+    379 0266  32 ED                           xor CH,CH
+    380 0268  F3> A5                          rep movsw
+    381 026A  5F                              pop di
+    382 026B  81 C7 00A0                      add di,0a0h
+    383 026F  59                              pop cx
+    384 0270  FE CD                           dec CH
+    385 0272  75 F0                           jnz delfrloop
+    386 0274  07                              pop es
+    387 0275  9D                              popf
+    388 0276  C3                              ret
+    389 0277                         delframe endp
+    390
+    391 0277                         scrollup proc near
+    392 0277  9C                              pushf
+    393 0278  06                              push es
+    394 0279  8B 16 0003r                     mov dx,word ptr winypos
+    395 027D  E8 089C                         call berechnexy
+    396 0280  80 3E 0005r 01                  cmp height,1
+    397 0285  75 03                           jnz scrupok
+    398 0287  E9 FE75                         jmp lastline
+    399 028A  FE 06 0160r            scrupok: inc scrupflag
+    400 028E  8B 0E 0005r                     mov cx,word ptr height
+    401 0292  86 E9                           xchg Ch,cl
+    402 0294  FE CD                           dec CH
+    403 0296  8B F7                           mov si,di
+    404 0298  81 C6 00A0                      add si,0a0h
+    405 029C  1E                              push ds
+    406 029D  06                              push es
+    407 029E  1F                              pop ds
+    408 029F  51                     scruploop:push cx
+    409 02A0  56                              push si
+    410 02A1  57                              push di
+    411 02A2  32 ED                           xor CH,CH
+    412 02A4  F3> A5                          rep movsw
+    413 02A6  5F                              pop di
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 8
+SYSTEM.ASM
+
+    414 02A7  81 C7 00A0                      add di,0a0h
+    415 02AB  5E                              pop si
+    416 02AC  81 C6 00A0                      add si,0a0h
+    417 02B0  59                              pop cx
+    418 02B1  FE CD                           dec CH
+    419 02B3  75 EA                           jnz scruploop
+    420 02B5  1F                              pop ds
+    421 02B6  E9 FE46                         jmp lastline
+    422 02B9                         scrollup endp
+    423
+    424 02B9                         scrolldn proc near
+    425 02B9  9C                              pushf
+    426 02BA  06                              push es
+    427 02BB  8B 16 0003r                     mov dx,word ptr winypos
+    428 02BF  02 16 0005r                     add dl,height
+    429 02C3  FE CA                           dec dl
+    430 02C5  E8 0854                         call berechnexy
+    431 02C8  80 3E 0005r 01                  cmp height,1
+    432 02CD  75 03                           jnz scrdnok
+    433 02CF  E9 FE2D                         jmp lastline
+    434 02D2  8B 0E 0005r            scrdnok: mov cx, word ptr height
+    435 02D6  86 E9                           xchg CH,cl
+    436 02D8  FE CD                           dec CH
+    437 02DA  8B F7                           mov si,di
+    438 02DC  81 EE 00A0                      sub si,0a0h
+    439 02E0  1E                              push ds
+    440 02E1  06                              push es
+    441 02E2  1F                              pop ds
+    442 02E3  51                     scrdnloop:push cx
+    443 02E4  56                              push si
+    444 02E5  57                              push di
+    445 02E6  32 ED                           xor CH,CH
+    446 02E8  F3> A5                          rep movsw
+    447 02EA  5F                              pop di
+    448 02EB  81 EF 00A0                      sub di,0a0h
+    449 02EF  5E                              pop si
+    450 02F0  81 EE 00A0                      sub si,0a0h
+    451 02F4  59                              pop cx
+    452 02F5  FE CD                           dec CH
+    453 02F7  75 EA                           jnz scrdnloop
+    454 02F9  1F                              pop ds
+    455 02FA  E9 FE02                         jmp lastline
+    456 02FD                         scrolldn endp
+    457
+    458 02FD                         scrolllf proc near
+    459 02FD  9C                              pushf
+    460 02FE  06                              push es
+    461 02FF  8B 16 0003r                     mov dx,word ptr winypos
+    462 0303  E8 0816                         call berechnexy
+    463 0306  80 3E 0006r 01                  cmp widthv,1
+    464 030B  75 15                           jnz scrlfok
+    465 030D                         clrcol label near
+    466 030D  8A 0E 0005r                     mov cl,height
+    467 0311  32 ED                           xor CH,CH
+    468 0313  B0 20                           mov al,20h
+    469 0315  8A 26 0009r                     mov ah,winattr
+    470 0319  AB                     clcolloop: stosw
+    471 031A  83 C7 7E                        add di,7eh
+    472 031D  E2 FA                           loop clcolloop
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 9
+SYSTEM.ASM
+
+    473 031F  07                              pop es
+    474 0320  9D                              popf
+    475 0321  C3                              ret
+    476 0322  8B F7                  scrlfok: mov si,di
+    477 0324  83 C6 02                        add si,2
+    478 0327  8B 0E 0005r                     mov cx,word ptr height
+    479 032B  86 E9                           xchg CH,cl
+    480 032D  FE C9                           dec cl
+    481 032F  B0 20                           mov al,20h
+    482 0331  8A 26 0009r                     mov ah,winattr
+    483 0335  1E                              push ds
+    484 0336  06                              push es
+    485 0337  1F                              pop ds
+    486 0338  51                     scrlfloop:push cx
+    487 0339  56                              push si
+    488 033A  57                              push di
+    489 033B  32 ED                           xor CH,CH
+    490 033D  F3> A5                          rep movsw
+    491 033F  AB                              stosw
+    492 0340  5F                              pop di
+    493 0341  81 C7 00A0                      add di,0a0h
+    494 0345  5E                              pop si
+    495 0346  81 C6 00A0                      add si,0a0h
+    496 034A  59                              pop cx
+    497 034B  FE CD                           dec CH
+    498 034D  75 E9                           jnz scrlfloop
+    499 034F  1F                              pop ds
+    500 0350  07                              pop es
+    501 0351  9D                              popf
+    502 0352  C3                              ret
+    503 0353                         scrolllf endp
+    504
+    505 0353                         scrollrg proc near
+    506 0353  9C                              pushf
+    507 0354  06                              push es
+    508 0355  8B 16 0003r                     mov dx,word ptr winypos
+    509 0359  E8 07C0                         call berechnexy
+    510 035C  80 3E 0006r 01                  cmp widthv,1
+    511 0361  75 02                           jnz scrrgok
+    512 0363  EB A8                           jmp short clrcol
+    513 0365  A0 0006r               scrrgok: mov al,widthv
+    514 0368  FE C8                           dec al
+    515 036A  32 E4                           xor ah,ah
+    516 036C  D1 E0                           shl ax,1
+    517 036E  03 F8                           add di,ax
+    518 0370  8B F7                           mov si,di
+    519 0372  83 EE 02                        sub si,2
+    520 0375  8B 0E 0005r                     mov cx,word ptr height
+    521 0379  86 E9                           xchg CH,cl
+    522 037B  FE C9                           dec cl
+    523 037D  B0 20                           mov al,20h
+    524 037F  8A 26 0009r                     mov ah,winattr
+    525 0383  1E                              push ds
+    526 0384  06                              push es
+    527 0385  1F                              pop ds
+    528 0386  FD                              std
+    529 0387  51                     scrrgloop:push cx
+    530 0388  56                              push si
+    531 0389  57                              push di
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 10
+SYSTEM.ASM
+
+    532 038A  32 ED                           xor CH,CH
+    533 038C  F3> A5                          rep movsw
+    534 038E  AB                              stosw
+    535 038F  5F                              pop di
+    536 0390  81 C7 00A0                      add di,0a0h
+    537 0394  5E                              pop si
+    538 0395  81 C6 00A0                      add si,0a0h
+    539 0399  59                              pop cx
+    540 039A  FE CD                           dec CH
+    541 039C  75 E9                           jnz scrrgloop
+    542 039E  1F                              pop ds
+    543 039F  07                              pop es
+    544 03A0  9D                              popf
+    545 03A1  C3                              ret
+    546 03A2                         scrollrg endp
+    547
+    548 03A2                         gotoxy proc near
+    549 03A2  89 16 0007r                     mov word ptr acty,dx
+    550 03A6  E9 07ED                         jmp setcursor
+    551 03A9                         gotoxy endp
+    552
+    553 03A9                         getxy proc near
+    554 03A9  8B 16 0007r                     mov dx,word ptr acty
+    555 03AD  C3                              ret
+    556 03AE                         getxy endp
+    557
+    558 03AE                         showcurs proc near
+    559 03AE  C6 06 000Ar 00                  mov curflag,0
+    560 03B3  E9 07E0                         jmp setcursor
+    561 03B6                         showcurs endp
+    562
+    563 03B6                         hidecurs proc near
+    564 03B6  C6 06 000Ar 01                  mov curflag,1
+    565 03BB  E9 07D8                         jmp setcursor
+    566 03BE                         hidecurs endp
+    567
+    568 03BE                         print proc near
+    569 03BE  9C                              pushf
+    570 03BF  56                              push si
+    571 03C0  06                              push es
+    572 03C1  8B 16 0007r                     mov dx,word ptr acty
+    573 03C5  52                              push dx
+    574 03C6  03 16 0003r                     add dx,word ptr winypos
+    575 03CA  E8 074F                         call berechnexy
+    576 03CD  5A                              pop dx
+    577 03CE  46                              inc si
+    578 03CF  AC                              lodsb
+    579 03D0  0A C0                           or al,al
+    580 03D2  74 43                           jz exitprint
+    581 03D4  8A C8                           mov cl,al
+    582 03D6  32 ED                           xor CH,CH
+    583 03D8  8A 26 0009r                     mov ah,winattr
+    584 03DC  AC                     prtloop: lodsb
+    585 03DD  3C 0D                           cmp al,0dh
+    586 03DF  74 3A                           jz cr
+    587 03E1  3C 0A                           cmp al,0ah
+    588 03E3  74 3A                           jz lf
+    589 03E5  AB                              stosw
+    590 03E6  FE C6                           inc dh
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 11
+SYSTEM.ASM
+
+    591 03E8  3A 36 0006r                     cmp dh,widthv
+    592 03EC  72 20                           jb prtok
+    593 03EE  32 F6                           xor dh,dh
+    594 03F0  FE C2                           inc dl
+    595 03F2  3A 16 0005r                     cmp dl,height
+    596 03F6  72 0D                           jb newkoord
+    597 03F8  FE CA                  prtscroll:dec dl
+    598 03FA  50                              push ax
+    599 03FB  51                              push cx
+    600 03FC  52                              push dx
+    601 03FD  56                              push si
+    602 03FE  E8 FE76                         call scrollup
+    603 0401  5E                              pop si
+    604 0402  5A                              pop dx
+    605 0403  59                              pop cx
+    606 0404  58                              pop ax
+    607 0405  52                     newkoord: push dx
+    608 0406  03 16 0003r                     add dx,word ptr winypos
+    609 040A  E8 070F                         call berechnexy
+    610 040D  5A                              pop dx
+    611 040E  E2 CC                  prtok:   loop prtloop
+    612 0410  89 16 0007r                     mov word ptr acty,dx
+    613 0414  E8 077F                         call setcursor
+    614 0417  07                     exitprint:pop es
+    615 0418  5E                              pop si
+    616 0419  9D                              popf
+    617 041A  C3                              ret
+    618 041B  32 F6                  cr:      xor dh,dh
+    619 041D  EB E6                           jmp newkoord
+    620 041F  FE C2                  lf:      inc dl
+    621 0421  3A 16 0005r                     cmp dl,height
+    622 0425  72 DE                           jb newkoord
+    623 0427  EB CF                           jmp prtscroll
+    624 0429                         print endp
+    625
+    626 0429                         convstring proc near
+    627 0429  9C                              pushf
+    628 042A  56                              push si
+    629 042B  57                              push di
+    630 042C  FC                              cld
+    631 042D  32 E4                           xor ah,ah
+    632 042F  56                              push si
+    633 0430  AC                     cnvloop: lodsb
+    634 0431  0A C0                           or al,al
+    635 0433  74 04                           jz lengthok
+    636 0435  FE C4                           inc ah
+    637 0437  EB F7                           jmp short cnvloop
+    638 0439  5E                     lengthok:pop si
+    639 043A  88 65 01                        mov [di+1],ah
+    640 043D  0A E4                           or ah,ah
+    641 043F  74 12                           jz nostring
+    642 0441  3A 25                           cmp ah,[di]
+    643 0443  76 02                           jbe stringok
+    644 0445  8A 25                           mov ah,[di]
+    645 0447  8A CC                  stringok:mov cl,ah
+    646 0449  32 ED                           xor CH,CH
+    647 044B  88 65 01                        mov [di+1],ah
+    648 044E  83 C7 02                        add di,2
+    649 0451  F3> A4                          rep movsb
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 12
+SYSTEM.ASM
+
+    650 0453  5F                     nostring:pop di
+    651 0454  5E                              pop si
+    652 0455  9D                              popf
+    653 0456  C3                              ret
+    654 0457                         convstring endp
+    655
+    656 0457                         readkey proc near
+    657 0457  A2 004Cr                        mov keyflag,al
+    658 045A  88 26 015Cr                     mov outflag,ah
+    659 045E  32 E4                  rkloop:  xor ah,ah
+    660 0460  CD 16                           int 16h
+    661 0462  80 3E 004Cr 00                  cmp keyflag,0
+    662 0467  74 0A                           jz charok
+    663 0469  3C 61                           cmp al,"a"
+    664 046B  72 06                           jb charok
+    665 046D  3C 7A                           cmp al,"z"
+    666 046F  77 02                           ja charok
+    667 0471  24 DF                           and al,0dfh
+    668 0473  0B C9                  charok:  or cx,cx
+    669 0475  75 01                           jnz tstchar
+    670 0477  C3                              ret
+    671 0478  9C                     tstchar: pushf
+    672 0479  51                              push cx
+    673 047A  06                              push es
+    674 047B  8B FE                           mov di,si
+    675 047D  1E                              push ds
+    676 047E  07                              pop es
+    677 047F  FC                              cld
+    678 0480  F2> AE                          repnz scasb
+    679 0482  75 05                           jnz chrfound
+    680 0484  07                              pop es
+    681 0485  59                              pop cx
+    682 0486  9D                              popf
+    683 0487  EB D5                           jmp short rkloop
+    684 0489  50                     chrfound:push ax
+    685 048A  80 3E 015Cr 00                  cmp outflag,0
+    686 048F  74 0D                           jz nooutput
+    687 0491  53                              push bx
+    688 0492  56                              push si
+    689 0493  A2 015Br                        mov sysstr+2,al
+    690 0496  BE 0159r                        mov si,offset sysstr
+    691 0499  E8 FF22                         call print
+    692 049C  5E                              pop si
+    693 049D  5B                              pop bx
+    694 049E  58                     nooutput:pop ax
+    695 049F  07                              pop es
+    696 04A0  59                              pop cx
+    697 04A1  9D                              popf
+    698 04A2  C3                              ret
+    699 04A3                         readkey endp
+    700
+    701 04A3                         flush proc near
+    702 04A3  FA                              cli
+    703 04A4  06                              push es
+    704 04A5  33 C0                           xor ax,ax
+    705 04A7  8E C0                           mov es,ax
+    706 04A9  26: A1 041A                     mov ax,es:[041ah]
+    707 04AD  26: A3 041C                     mov es:[041ch],ax
+    708 04B1  07                              pop es
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 13
+SYSTEM.ASM
+
+    709 04B2  FB                              sti
+    710 04B3  C3                              ret
+    711 04B4                         flush endp
+    712
+    713 04B4                         input proc near
+    714 04B4  9C                              pushf
+    715 04B5  51                              push cx
+    716 04B6  56                              push si
+    717 04B7  57                              push di
+    718 04B8  55                              push bp
+    719 04B9  06                              push es
+    720 04BA  56                              push si
+    721 04BB  1E                              push ds
+    722 04BC  07                              pop es
+    723 04BD  C6 06 0160r 00                  mov scrupflag,0
+    724 04C2  88 26 015Dr                     mov delflag,ah
+    725 04C6  A2 004Cr                        mov keyflag,al
+    726 04C9  89 0E 0155r                     mov anzkeys,cx
+    727 04CD  8B 16 0007r                     mov dx,word ptr acty
+    728 04D1  89 16 0157r                     mov posxy,dx
+    729 04D5  89 3E 004Dr                     mov bufadr,di
+    730 04D9  B4 02                           mov ah,2
+    731 04DB  CD 16                           int 16h
+    732 04DD  24 80                           and al,80h
+    733 04DF  A2 004Fr                        mov insert,al
+    734 04E2  BF 0050r                        mov di,offset strbuf
+    735 04E5  57                              push di
+    736 04E6  B9 0101                         mov cx,257
+    737 04E9  FC                              cld
+    738 04EA  F3> A4                          rep movsb
+    739 04EC  5E                              pop si
+    740 04ED  E8 FECE                         call print
+    741 04F0  80 3E 0160r 00                  cmp scrupflag,0
+    742 04F5  74 11                           jz noscroll
+    743 04F7  8B 16 0157r                     mov dx,posxy
+    744 04FB  2A 16 0160r                     sub dl,scrupflag
+    745 04FF  89 16 0157r                     mov posxy,dx
+    746 0503  C6 06 0160r 00                  mov scrupflag,0
+    747 0508  8B EE                  noscroll:mov bp,si
+    748 050A  3E: 8A 46 01                    mov al,ds:[bp+1]
+    749 050E  A2 0154r                        mov bufpos,al
+    750 0511  32 E4                           xor ah,ah
+    751 0513  05 0002                         add ax,2
+    752 0516  03 E8                           add bp,ax
+    753 0518  32 E4                  getkey:  xor ah,ah
+    754 051A  CD 16                           int 16h
+    755 051C  80 3E 004Cr 00                  cmp keyflag,0
+    756 0521  74 0A                           jz noupchar
+    757 0523  3C 61                           cmp al,"a"
+    758 0525  72 06                           jb noupchar
+    759 0527  3C 7A                           cmp al,"z"
+    760 0529  77 02                           ja noupchar
+    761 052B  24 DF                           and al,0dfh
+    762 052D  83 3E 0155r 00         noupchar:cmp anzkeys,0
+    763 0532  74 0E                           jz keyok
+    764 0534  8B 3E 004Dr                     mov di,bufadr
+    765 0538  8B 0E 0155r                     mov cx, anzkeys
+    766 053C  F2> AE                          repnz scasb
+    767 053E  75 02                           jnz keyok
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 14
+SYSTEM.ASM
+
+    768 0540  EB D6                           jmp short getkey
+    769 0542  3C 1B                  keyok:   cmp al,1bh
+    770 0544  75 0A                           jnz chkkey1
+    771 0546  B0 FF                           mov al,-1
+    772 0548  5E                              pop si
+    773 0549  07                     exitinput: pop es
+    774 054A  5D                              pop bp
+    775 054B  5F                              pop di
+    776 054C  5E                              pop si
+    777 054D  59                              pop cx
+    778 054E  9D                              popf
+    779 054F  C3                              ret
+    780 0550  3C 0D                  chkkey1: cmp al,0dh
+    781 0552  75 1C                           jnz chkkey2
+    782 0554  8A 4C 01                        mov cl,[si+1]
+    783 0557  32 ED                           xor CH,ch
+    784 0559  83 C1 02                        add cx,2
+    785 055C  5F                              pop di
+    786 055D  57                              push di
+    787 055E  F3> A4                          rep movsb
+    788 0560  8B 16 0157r                     mov dx,posxy
+    789 0564  89 16 0007r                     mov word ptr acty,dx
+    790 0568  5E                              pop si
+    791 0569  E8 FE52                         call print
+    792 056C  32 C0                           xor al,al
+    793 056E  EB D9                           jmp short exitinput
+    794 0570  80 FC 52               chkkey2: cmp ah,82
+    795 0573  75 07                           jnz chkkey3
+    796 0575  80 36 004Fr 80                  xor byte ptr insert,80h
+    797 057A  EB 9C                           jmp getkey
+    798 057C  80 FC 4B               chkkey3: cmp ah,75
+    799 057F  75 03                           jnz chkkey4
+    800 0581  E9 00C7                         jmp curleft
+    801 0584  80 FC 4D               chkkey4: cmp ah,77
+    802 0587  75 03                           jnz chkkey5
+    803 0589  E9 00E6                         jmp curright
+    804 058C  80 FC 48               chkkey5:cmp ah,72
+    805 058F  75 03                           jnz chkkey6
+    806 0591  E9 0105                         jmp curup
+    807 0594  80 FC 50               chkkey6: cmp ah,80
+    808 0597  75 03                           jnz chkkey7
+    809 0599  E9 011B                         jmp curdown
+    810 059C  80 FC 47               chkkey7: cmp ah,71
+    811 059F  75 03                           jnz chkkey8
+    812 05A1  E9 0139                         jmp curhome
+    813 05A4  80 FC 4F               chkkey8: cmp ah,79
+    814 05A7  75 03                           jnz chkkey9
+    815 05A9  E9 0146                         jmp curend
+    816 05AC  80 FC 53               chkkey9: cmp ah,83
+    817 05AF  75 03                           jnz chkkey10
+    818 05B1  E9 0158                         jmp curdel
+    819 05B4  3D 0E08                chkkey10:cmp ax,0e08h
+    820 05B7  75 03                           jnz chkkey11
+    821 05B9  E9 019E                         jmp curdellf
+    822 05BC  3D 7700                chkkey11:cmp ax,7700h
+    823 05BF  75 03                           jnz chkkey12
+    824 05C1  E9 01C6                         jmp delall
+    825 05C4  3C 20                  chkkey12:cmp al,20h
+    826 05C6  73 03                           jae chrok
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 15
+SYSTEM.ASM
+
+    827 05C8  E9 FF4D                         jmp getkey
+    828 05CB  80 3E 015Dr 00         chrok:   cmp delflag,0
+    829 05D0  74 0A                           jz chrok1
+    830 05D2  C6 06 015Dr 00                  mov delflag,0
+    831 05D7  50                              push ax
+    832 05D8  E8 0686                         call freebuffer
+    833 05DB  58                              pop ax
+    834 05DC  8A 1E 0154r            chrok1: mov bl,bufpos
+    835 05E0  3A 1C                           cmp bl,[si]
+    836 05E2  75 10                           jnz freeok
+    837 05E4  56                              push si
+    838 05E5  57                              push di
+    839 05E6  55                              push bp
+    840 05E7  06                              push es
+    841 05E8  B8 0E07                         mov ax,0e07h
+    842 05EB  CD 10                           int 10h
+    843 05ED  07                              pop es
+    844 05EE  5D                              pop bp
+    845 05EF  5F                              pop di
+    846 05F0  5E                              pop si
+    847 05F1  E9 FF24                         jmp getkey
+    848 05F4  E8 0625                freeok:  call chkinsert
+    849 05F7  3E: 88 46 00                    mov ds:[bp],al
+    850 05FB  8A 44 01                        mov al,[si+1]
+    851 05FE  3A 04                           cmp al,[si]
+    852 0600  74 03                           jz dontinc
+    853 0602  FE 44 01                        inc byte ptr [si+1]
+    854 0605  8B 16 0157r            dontinc: mov dx,posxy
+    855 0609  80 3E 0160r 00                  cmp scrupflag,0
+    856 060E  74 0B                           jz printok
+    857 0610  FE CA                           dec dl
+    858 0612  89 16 0157r                     mov posxy,dx
+    859 0616  C6 06 0160r 00                  mov scrupflag,0
+    860 061B  87 16 0007r            printok: xchg dx,word ptr acty
+    861 061F  52                              push dx
+    862 0620  E8 FD9B                         call print
+    863 0623  8F 06 0007r                     pop word ptr acty
+    864 0627  8B 16 0157r                     mov dx,posxy
+    865 062B  2A 16 0160r                     sub dl,scrupflag
+    866 062F  89 16 0157r                     mov posxy,dx
+    867 0633  C6 06 0160r 00                  mov scrupflag,0
+    868 0638  EB 38 90                        jmp curright
+    869 063B  89 16 0007r            poscursor:mov word ptr acty,dx
+    870 063F  56                              push si
+    871 0640  57                              push di
+    872 0641  55                              push bp
+    873 0642  E8 0551                         call setcursor
+    874 0645  5D                              pop bp
+    875 0646  5F                              pop di
+    876 0647  5E                              pop si
+    877 0648  E9 FECD                         jmp getkey
+    878 064B  C6 06 015Dr 00         curleft: mov delflag,0
+    879 0650  80 3E 0154r 00                  cmp bufpos,0
+    880 0655  75 03                           jnz curleftok
+    881 0657  E9 FEBE                         jmp getkey
+    882 065A  4D                     curleftok:dec bp
+    883 065B  FE 0E 0154r                     dec bufpos
+    884 065F  8B 16 0007r                     mov dx,word ptr acty
+    885 0663  80 EE 01                        sub dh,1
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 16
+SYSTEM.ASM
+
+    886 0666  79 D3                           jns poscursor
+    887 0668  8A 36 0006r                     mov dh,widthv
+    888 066C  FE CE                           dec dh
+    889 066E  FE CA                           dec dl
+    890 0670  EB C9                           jmp poscursor
+    891 0672  C6 06 015Dr 00         curright:mov delflag,0
+    892 0677  A0 0154r                        mov al,bufpos
+    893 067A  3A 44 01                        cmp al,[si+1]
+    894 067D  75 03                           jnz currgok
+    895 067F  E9 FE96                         jmp getkey
+    896 0682  45                     currgok: inc bp
+    897 0683  FE 06 0154r                     inc bufpos
+    898 0687  8B 16 0007r                     mov dx,word ptr acty
+    899 068B  FE C6                           inc dh
+    900 068D  3A 36 0006r                     cmp dh,widthv
+    901 0691  72 A8                           jb poscursor
+    902 0693  32 F6                           xor dh,dh
+    903 0695  FE C2                           inc dl
+    904 0697  EB A2                           jmp poscursor
+    905 0699  C6 06 015Dr 00         curup:   mov delflag,0
+    906 069E  E8 05AC                         call getpos
+    907 06A1  0A C0                           or al,al
+    908 06A3  74 0F                           jz nocurmove
+    909 06A5  FE CA                           dec dl
+    910 06A7  A0 0006r                        mov al,widthv
+    911 06AA  28 06 0154r                     sub bufpos,al
+    912 06AE  32 E4                           xor ah,ah
+    913 06B0  2B E8                           sub bp,ax
+    914 06B2  EB 87                           jmp poscursor
+    915 06B4  E9 FE61                nocurmove:jmp getkey
+    916 06B7  C6 06 015Dr 00         curdown: mov delflag,0
+    917 06BC  A0 0154r                        mov al,bufpos
+    918 06BF  02 06 0006r                     add al,widthv
+    919 06C3  72 EF                           jc nocurmove
+    920 06C5  3A 44 01                        cmp al,[si+1]
+    921 06C8  77 EA                           ja nocurmove
+    922 06CA  E8 0580                         call getpos
+    923 06CD  FE C2                           inc dl
+    924 06CF  A0 0006r                        mov al,widthv
+    925 06D2  00 06 0154r                     add bufpos,al
+    926 06D6  32 E4                           xor ah,ah
+    927 06D8  03 E8                           add bp,ax
+    928 06DA  E9 FF5E                         jmp poscursor
+    929 06DD  C6 06 015Dr 00         curhome: mov delflag,0
+    930 06E2  8B EE                           mov bp,si
+    931 06E4  83 C5 02                        add bp,2
+    932 06E7  C6 06 0154r 00                  mov bufpos,0
+    933 06EC  E8 055E                         call getpos
+    934 06EF  E9 FF49                         jmp poscursor
+    935 06F2  C6 06 015Dr 00         curend:  mov delflag,0
+    936 06F7  8A 44 01                        mov al,[si+1]
+    937 06FA  A2 0154r                        mov bufpos,al
+    938 06FD  32 E4                           xor ah,ah
+    939 06FF  8B E8                           mov bp,ax
+    940 0701  03 EE                           add bp,si
+    941 0703  83 C5 02                        add bp,2
+    942 0706  E8 0544                         call getpos
+    943 0709  E9 FF2F                         jmp poscursor
+    944 070C  C6 06 015Dr 00         curdel:  mov delflag,0
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 17
+SYSTEM.ASM
+
+    945 0711  80 7C 01 00                     cmp byte ptr [si+1],0
+    946 0715  75 03                           jnz delok
+    947 0717  E9 FDFE                         jmp getkey
+    948 071A  8B FD                  delok:   mov di,bp
+    949 071C  8A 4C 01                        mov cl,[si+1]
+    950 071F  9C                              pushf
+    951 0720  56                              push si
+    952 0721  8B F7                           mov si,di
+    953 0723  46                              inc si
+    954 0724  FC                              cld
+    955 0725  2A 0E 0154r                     sub cl,bufpos
+    956 0729  74 2A                           jz nodelete
+    957 072B  06                              push es
+    958 072C  1E                              push ds
+    959 072D  07                              pop es
+    960 072E  32 ED                           xor CH,CH
+    961 0730  FE C9                           dec cl
+    962 0732  74 02                           jz nodelete1
+    963 0734  F3> A4                          rep movsb
+    964 0736  B0 20                  nodelete1:mov al,20h
+    965 0738  AA                              stosb
+    966 0739  07                              pop es
+    967 073A  5E                              pop si
+    968 073B  56                              push si
+    969 073C  8B 16 0157r                     mov dx,posxy
+    970 0740  87 16 0007r                     xchg dx,word ptr acty
+    971 0744  52                              push dx
+    972 0745  E8 FC76                         call print
+    973 0748  5A                              pop dx
+    974 0749  89 16 0007r                     mov word ptr acty,dx
+    975 074D  5E                              pop si
+    976 074E  FE 4C 01                        dec byte ptr [si+1]
+    977 0751  9D                              popf
+    978 0752  E9 FEE6                         jmp poscursor
+    979 0755  5E                     nodelete:pop si
+    980 0756  9D                              popf
+    981 0757  E9 FDBE                         jmp getkey
+    982 075A  C6 06 015Dr 00         curdellf:mov delflag,0
+    983 075F  80 3E 0154r 00                  cmp bufpos,0
+    984 0764  75 03                           jnz curdlfok
+    985 0766  E9 FDAF                         jmp getkey
+    986 0769  4D                     curdlfok:dec bp
+    987 076A  FE 0E 0154r                     dec bufpos
+    988 076E  8B 16 0007r                     mov dx,word ptr acty
+    989 0772  80 EE 01                        sub dh,1
+    990 0775  79 08                           jns poscurs
+    991 0777  8A 36 0006r                     mov dh,widthv
+    992 077B  FE CE                           dec dh
+    993 077D  FE CA                           dec dl
+    994 077F  89 16 0007r            poscurs: mov word ptr acty,dx
+    995 0783  56                              push si
+    996 0784  E8 040F                         call setcursor
+    997 0787  5E                              pop si
+    998 0788  EB 82                           jmp curdel
+    999 078A  C6 06 015Dr 00         delall:  mov delflag,0
+   1000 078F  E8 04CF                         call freebuffer
+   1001 0792  E9 FD83                         jmp getkey
+   1002 0795                         input endp
+   1003
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 18
+SYSTEM.ASM
+
+   1004 0795                         deletestr proc near
+   1005 0795  8A 4C 01                        mov cl,[si+1]
+   1006 0798  0A C9                           or cl,cl
+   1007 079A  74 21                           jz extdelstr
+   1008 079C  3A E1                           cmp ah,cl
+   1009 079E  77 1D                           ja extdelstr
+   1010 07A0  0A E4                           or ah,ah
+   1011 07A2  74 19                           jz extdelstr
+   1012 07A4  0A C0                           or al,al
+   1013 07A6  75 06                           jnz dellenok
+   1014 07A8  8A C4                           mov al,ah
+   1015 07AA  2A C4                           sub al,ah
+   1016 07AC  FE C0                           inc al
+   1017 07AE  8A EC                  dellenok:mov CH,ah
+   1018 07B0  02 E8                           add CH,al
+   1019 07B2  FE CD                           dec CH
+   1020 07B4  3A E9                           cmp CH,cl
+   1021 07B6  77 05                           ja extdelstr
+   1022 07B8  75 04                           jnz okdelstr
+   1023 07BA  28 44 01                        sub [si+1],al
+   1024 07BD  C3                     extdelstr:ret
+   1025 07BE  9C                     okdelstr:pushf
+   1026 07BF  50                              push ax
+   1027 07C0  56                              push si
+   1028 07C1  06                              push es
+   1029 07C2  1E                              push ds
+   1030 07C3  07                              pop es
+   1031 07C4  8A 5C 01                        mov bl,[si+1]
+   1032 07C7  28 44 01                        sub [si+1],al
+   1033 07CA  8B FE                           mov di,si
+   1034 07CC  8A D4                           mov dl,ah
+   1035 07CE  32 F6                           xor dh,dh
+   1036 07D0  03 FA                           add di,dx
+   1037 07D2  47                              inc di
+   1038 07D3  8B F7                           mov si,di
+   1039 07D5  8A D0                           mov dl,al
+   1040 07D7  03 F2                           add si,dx
+   1041 07D9  32 FF                           xor bh,bh
+   1042 07DB  02 C4                           add al,ah
+   1043 07DD  2A D8                           sub bl,al
+   1044 07DF  FE C3                           inc bl
+   1045 07E1  8B CB                           mov cx,bx
+   1046 07E3  FC                              cld
+   1047 07E4  F3> A4                          rep movsb
+   1048 07E6  07                              pop es
+   1049 07E7  5E                              pop si
+   1050 07E8  58                              pop ax
+   1051 07E9  9D                              popf
+   1052 07EA  C3                              ret
+   1053 07EB                         deletestr endp
+   1054
+   1055 07EB                         insertstr proc near
+   1056 07EB  8A 44 01                        mov al,[si+1]
+   1057 07EE  0A C0                           or al,al
+   1058 07F0  74 55                           jz extinsstr
+   1059 07F2  0A E4                           or ah,ah
+   1060 07F4  74 51                           jz extinsstr
+   1061 07F6  3A 65 01                        cmp ah,[di+1]
+   1062 07F9  77 4C                           ja extinsstr
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 19
+SYSTEM.ASM
+
+   1063 07FB  02 45 01                        add al,[di+1]
+   1064 07FE  3A 05                           cmp al,[di]
+   1065 0800  77 45                           ja extinsstr
+   1066 0802  9C                              pushf
+   1067 0803  50                              push ax
+   1068 0804  56                              push si
+   1069 0805  57                              push di
+   1070 0806  06                              push es
+   1071 0807  1E                              push ds
+   1072 0808  07                              pop es
+   1073 0809  8A 4D 01                        mov cl,[di+1]
+   1074 080C  2A CC                           sub cl,ah
+   1075 080E  FE C1                           inc cl
+   1076 0810  32 ED                           xor CH,CH
+   1077 0812  8A 5C 01                        mov bl,[si+1]
+   1078 0815  56                              push si
+   1079 0816  57                              push di
+   1080 0817  8B F7                           mov si,di
+   1081 0819  8A 55 01                        mov dl,[di+1]
+   1082 081C  32 F6                           xor dh,dh
+   1083 081E  03 F2                           add si,dx
+   1084 0820  46                              inc si
+   1085 0821  32 FF                           xor bh,bh
+   1086 0823  8B FE                           mov di,si
+   1087 0825  03 FB                           add di,bx
+   1088 0827  FD                              std
+   1089 0828  F3> A4                          rep movsb
+   1090 082A  5F                              pop di
+   1091 082B  5E                              pop si
+   1092 082C  83 C6 02                        add si,2
+   1093 082F  8A 4C FF                        mov cl,[si-1]
+   1094 0832  32 ED                           xor CH,CH
+   1095 0834  8A D4                           mov dl,ah
+   1096 0836  03 FA                           add di,dx
+   1097 0838  47                              inc di
+   1098 0839  FC                              cld
+   1099 083A  F3> A4                          rep movsb
+   1100 083C  07                              pop es
+   1101 083D  5F                              pop di
+   1102 083E  5E                              pop si
+   1103 083F  8A 44 01                        mov al,[si+1]
+   1104 0842  00 45 01                        add [di+1],al
+   1105 0845  58                              pop ax
+   1106 0846  9D                              popf
+   1107 0847  C3                     extinsstr:ret
+   1108 0848                         insertstr endp
+   1109
+   1110 0848                         copystr proc near
+   1111 0848  C6 45 01 00                     mov byte ptr[di+1],0
+   1112 084C  8A 4C 01                        mov cl,[si+1]
+   1113 084F  0A C9                           or cl,cl
+   1114 0851  74 42                           jz extcopystr
+   1115 0853  0A E4                           or ah,ah
+   1116 0855  74 3E                           jz extcopystr
+   1117 0857  3A E1                           cmp ah,cl
+   1118 0859  77 3A                           ja extcopystr
+   1119 085B  0A C0                           or al,al
+   1120 085D  75 06                           jnz clenok
+   1121 085F  8A C1                           mov al,cl
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 20
+SYSTEM.ASM
+
+   1122 0861  2A C4                           sub al,ah
+   1123 0863  FE C0                           inc al
+   1124 0865  3A 05                  clenok:  cmp al,[di]
+   1125 0867  76 02                           jbe countok
+   1126 0869  8A 05                           mov al,[di]
+   1127 086B  8A EC                  countok: mov CH,ah
+   1128 086D  02 E8                           add CH,al
+   1129 086F  FE CD                           dec CH
+   1130 0871  3A E9                           cmp CH,cl
+   1131 0873  77 20                           ja extcopystr
+   1132 0875  9C                              pushf
+   1133 0876  50                              push ax
+   1134 0877  56                              push si
+   1135 0878  57                              push di
+   1136 0879  06                              push es
+   1137 087A  1E                              push ds
+   1138 087B  07                              pop es
+   1139 087C  88 45 01                        mov [di+1],al
+   1140 087F  83 C7 02                        add di,2
+   1141 0882  8A C8                           mov cl,al
+   1142 0884  32 ED                           xor CH,CH
+   1143 0886  8A C4                           mov al,ah
+   1144 0888  32 E4                           xor ah,ah
+   1145 088A  03 F0                           add si,ax
+   1146 088C  46                              inc si
+   1147 088D  FC                              cld
+   1148 088E  F3> A4                          rep movsb
+   1149 0890  07                              pop es
+   1150 0891  5F                              pop di
+   1151 0892  5E                              pop si
+   1152 0893  58                              pop ax
+   1153 0894  9D                              popf
+   1154 0895  C3                     extcopystr:ret
+   1155 0896                         copystr endp
+   1156
+   1157 0896                         concatstr proc near
+   1158 0896  8A 4C 01                       mov cl,[si+1]
+   1159 0899  0A C9                          or cl,cl
+   1160 089B  74 28                          jz extconstr
+   1161 089D  8A C1                          mov al,cl
+   1162 089F  02 45 01                       add al,[di+1]
+   1163 08A2  3A 05                          cmp al,[di]
+   1164 08A4  77 1F                          ja extconstr
+   1165 08A6  9C                             pushf
+   1166 08A7  56                             push si
+   1167 08A8  57                             push di
+   1168 08A9  06                             push es
+   1169 08AA  1E                             push ds
+   1170 08AB  07                             pop es
+   1171 08AC  8A 45 01                       mov al,[di+1]
+   1172 08AF  00 4D 01                       add [di+1],cl
+   1173 08B2  32 ED                          xor CH,CH
+   1174 08B4  83 C6 02                       add si,2
+   1175 08B7  32 E4                          xor ah,ah
+   1176 08B9  03 F8                          add di,ax
+   1177 08BB  83 C7 02                       add di,2
+   1178 08BE  FC                             cld
+   1179 08BF  F3> A4                         rep movsb
+   1180 08C1  07                             pop es
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 21
+SYSTEM.ASM
+
+   1181 08C2  5F                             pop di
+   1182 08C3  5E                             pop si
+   1183 08C4  9D                             popf
+   1184 08C5  C3                     extconstr:ret
+   1185 08C6                         concatstr endp
+   1186
+   1187 08C6                         posstr proc near
+   1188 08C6  8A 4D 01                        mov cl,[di+1]
+   1189 08C9  8A 6C 01                        mov CH,[si+1]
+   1190 08CC  0A C9                           or cl,cl
+   1191 08CE  74 2E                           jz extposstr
+   1192 08D0  3A CD                           cmp cl,CH
+   1193 08D2  77 2A                           ja extposstr
+   1194 08D4  9C                              pushf
+   1195 08D5  FC                              cld
+   1196 08D6  56                              push si
+   1197 08D7  57                              push di
+   1198 08D8  06                              push es
+   1199 08D9  1E                              push ds
+   1200 08DA  07                              pop es
+   1201 08DB  83 C6 02                        add si,2
+   1202 08DE  83 C7 02                        add di,2
+   1203 08E1  2A E9                           sub CH,cl
+   1204 08E3  FE C5                           inc CH
+   1205 08E5  B0 01                           mov al,1
+   1206 08E7  51                     posloop: push cx
+   1207 08E8  56                               push si
+   1208 08E9  57                               push di
+   1209 08EA  32 ED                            xor CH,CH
+   1210 08EC  F3> A6                           repz cmpsb
+   1211 08EE  74 11                            jz posfound
+   1212 08F0  5F                               pop di
+   1213 08F1  5E                               pop si
+   1214 08F2  59                               pop cx
+   1215 08F3  FE C0                            inc al
+   1216 08F5  46                               inc si
+   1217 08F6  FE CD                            dec CH
+   1218 08F8  75 ED                            jnz posloop
+   1219 08FA  07                               pop es
+   1220 08FB  5F                               pop di
+   1221 08FC  5E                               pop si
+   1222 08FD  9D                               popf
+   1223 08FE  32 C0                  extposstr:xor al,al
+   1224 0900  C3                              ret
+   1225 0901  5F                     posfound:pop di
+   1226 0902  5E                              pop si
+   1227 0903  59                              pop cx
+   1228 0904  07                              pop es
+   1229 0905  5F                              pop di
+   1230 0906  5E                              pop si
+   1231 0907  9D                              popf
+   1232 0908  C3                              ret
+   1233 0909                         posstr endp
+   1234
+   1235 0909                         upstr proc near
+   1236 0909  8A 4C 01                        mov cl,[si+1]
+   1237 090C  0A C9                           or cl,cl
+   1238 090E  75 01                           jnz okupstr
+   1239 0910  C3                              ret
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 22
+SYSTEM.ASM
+
+   1240 0911  32 ED                  okupstr: xor CH,CH
+   1241 0913  9C                              pushf
+   1242 0914  56                              push si
+   1243 0915  FC                              cld
+   1244 0916  83 C6 02                        add si,2
+   1245 0919  AC                     uploop:  lodsb
+   1246 091A  3C 61                           cmp al,"a"
+   1247 091C  72 09                           jb chkok
+   1248 091E  3C 7A                           cmp al,"z"
+   1249 0920  77 05                           ja chkok
+   1250 0922  24 DF                           and al,0dfh
+   1251 0924  88 44 FF                        mov [si-1],al
+   1252 0927  E2 F0                  chkok:   loop uploop
+   1253 0929  5E                              pop si
+   1254 092A  9D                              popf
+   1255 092B  C3                              ret
+   1256 092C                         upstr endp
+   1257
+   1258 092C                         ignchar proc near
+   1259 092C  8A 4C 01                        mov cl,[si+1]
+   1260 092F  0A C9                           or cl,cl
+   1261 0931  74 1D                           jz extignchr
+   1262 0933  56                              push si
+   1263 0934  32 ED                           xor CH,CH
+   1264 0936  83 C6 02                        add si,2
+   1265 0939  32 E4                           xor ah,ah
+   1266 093B  38 04                  ignloop: cmp [si],al
+   1267 093D  75 05                           jnz ignok
+   1268 093F  FE C4                           inc ah
+   1269 0941  46                              inc si
+   1270 0942  E2 F7                           loop ignloop
+   1271 0944  5E                     ignok:   pop si
+   1272 0945  0A E4                           or ah,ah
+   1273 0947  74 07                           jz extignchr
+   1274 0949  8A C4                           mov al,ah
+   1275 094B  B4 01                           mov ah,1
+   1276 094D  E9 FE45                         jmp deletestr
+   1277 0950  C3                     extignchr:ret
+   1278 0951                         ignchar endp
+   1279
+   1280 0951                         cutchar proc near
+   1281 0951  8A 4C 01                        mov cl,[si+1]
+   1282 0954  0A C9                           or cl,cl
+   1283 0956  74 23                           jz extcutchr
+   1284 0958  56                              push si
+   1285 0959  32 ED                           xor CH,CH
+   1286 095B  03 F1                           add si,cx
+   1287 095D  46                              inc si
+   1288 095E  32 E4                           xor ah,ah
+   1289 0960  8A D1                           mov dl,cl
+   1290 0962  38 04                  cutloop: cmp [si],al
+   1291 0964  75 07                           jnz cutok
+   1292 0966  FE C4                           inc ah
+   1293 0968  4E                              dec si
+   1294 0969  FE CA                           dec dl
+   1295 096B  E2 F5                           loop cutloop
+   1296 096D  FE C2                  cutok:   inc dl
+   1297 096F  5E                               pop si
+   1298 0970  0A E4                            or ah,ah
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 23
+SYSTEM.ASM
+
+   1299 0972  74 07                            jz extcutchr
+   1300 0974  8A C4                            mov al,ah
+   1301 0976  8A E2                            mov ah,dl
+   1302 0978  E9 FE1A                          jmp deletestr
+   1303 097B  C3                     extcutchr: ret
+   1304 097C                         cutchar endp
+   1305
+   1306 097C                         partostr proc near
+   1307 097C  C6 44 01 00                     mov byte ptr [si+1],0
+   1308 0980  26: 8A 0D                       mov cl,es:[di]
+   1309 0983  0A C9                           or cl,cl
+   1310 0985  74 21                           jz extparstr
+   1311 0987  3A 0C                           cmp cl,[si]
+   1312 0989  77 1D                           ja extparstr
+   1313 098B  9C                              pushf
+   1314 098C  56                              push si
+   1315 098D  57                              push di
+   1316 098E  1E                              push ds
+   1317 098F  06                              push es
+   1318 0990  1E                              push ds
+   1319 0991  06                              push es
+   1320 0992  1F                              pop ds
+   1321 0993  07                              pop es
+   1322 0994  47                              inc di
+   1323 0995  26: 88 4C 01                    mov es:[si+1],cl
+   1324 0999  83 C6 02                        add si,2
+   1325 099C  87 F7                           xchg si,di
+   1326 099E  FC                              cld
+   1327 099F  32 ED                           xor CH,CH
+   1328 09A1  F3> A4                          rep movsb
+   1329 09A3  07                              pop es
+   1330 09A4  1F                              pop ds
+   1331 09A5  5F                              pop di
+   1332 09A6  5E                              pop si
+   1333 09A7  9D                              popf
+   1334 09A8  C3                     extparstr:ret
+   1335 09A9                         partostr endp
+   1336
+   1337 09A9                         dadd proc near
+   1338 09A9  03 C3                           add ax,bx
+   1339 09AB  13 D1                           adc dx,cx
+   1340 09AD  C3                              ret
+   1341 09AE                         dadd endp
+   1342
+   1343 09AE                         dsub proc near
+   1344 09AE  2B C3                           sub ax,bx
+   1345 09B0  1B D1                           sbb dx,cx
+   1346 09B2  C3                              ret
+   1347 09B3                         dsub endp
+   1348
+   1349 09B3                         dmul proc near
+   1350 09B3  56                              push si
+   1351 09B4  57                              push di
+   1352 09B5  52                              push dx
+   1353 09B6  50                              push ax
+   1354 09B7  F7 E3                           mul bx
+   1355 09B9  8B FA                           mov di,dx
+   1356 09BB  8B F0                           mov si,ax
+   1357 09BD  58                              pop ax
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 24
+SYSTEM.ASM
+
+   1358 09BE  F7 E1                           mul cx
+   1359 09C0  03 F8                           add di,ax
+   1360 09C2  58                              pop ax
+   1361 09C3  F7 E3                           mul bx
+   1362 09C5  03 F8                           add di,ax
+   1363 09C7  8B D7                           mov dx,di
+   1364 09C9  8B C6                           mov ax,si
+   1365 09CB  5F                              pop di
+   1366 09CC  5E                              pop si
+   1367 09CD  C3                              ret
+   1368 09CE                         dmul endp
+   1369
+   1370 09CE                         ddiv proc near
+   1371 09CE  53                              push bx
+   1372 09CF  0B D9                           or bx,cx
+   1373 09D1  5B                              pop bx
+   1374 09D2  75 02                           jnz startdiv
+   1375 09D4  F9                              stc
+   1376 09D5  C3                              ret
+   1377 09D6  55                     startdiv:push bp
+   1378 09D7  56                              push si
+   1379 09D8  57                              push di
+   1380 09D9  8B F3                           mov si,bx
+   1381 09DB  8B F9                           mov di,cx
+   1382 09DD  B9 0020                         mov cx,20h
+   1383 09E0  33 DB                           xor bx,bx
+   1384 09E2  33 ED                           xor bp,bp
+   1385 09E4  D1 E0                           shl ax,1
+   1386 09E6  D1 D2                           rcl dx,1
+   1387 09E8  D1 D3                  divloop:rcl bx,1
+   1388 09EA  D1 D5                           rcl bp,1
+   1389 09EC  53                              push bx
+   1390 09ED  55                              push bp
+   1391 09EE  2B DE                           sub bx,si
+   1392 09F0  1B EF                           sbb bp,di
+   1393 09F2  73 06                           jnc divok
+   1394 09F4  5D                              pop bp
+   1395 09F5  5B                              pop bx
+   1396 09F6  F8                              clc
+   1397 09F7  EB 05 90                        jmp contdivi
+   1398 09FA  83 C4 04               divok:   add sp,4
+   1399 09FD  F9                              stc
+   1400 09FE  D1 D0                  contdivi:rcl ax,1
+   1401 0A00  D1 D2                           rcl dx,1
+   1402 0A02  E2 E4                           loop divloop
+   1403 0A04  8B CD                           mov cx,bp
+   1404 0A06  5F                              pop di
+   1405 0A07  5E                              pop si
+   1406 0A08  5D                              pop bp
+   1407 0A09  F8                              clc
+   1408 0A0A  C3                              ret
+   1409 0A0B                         ddiv endp
+   1410
+   1411 0A0B                         dneg proc near
+   1412 0A0B  F7 D0                            not ax
+   1413 0A0D  F7 D2                            not dx
+   1414 0A0F  05 0001                          add ax,1
+   1415 0A12  83 D2 00                         adc dx,0
+   1416 0A15  C3                               ret
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 25
+SYSTEM.ASM
+
+   1417 0A16                         dneg endp
+   1418
+   1419 0A16                         numtostr proc near
+   1420 0A16  80 FB 02                        cmp bl,2
+   1421 0A19  72 05                           jb basiserr
+   1422 0A1B  80 FB 10                        cmp bl,10h
+   1423 0A1E  76 02                           jbe basisok
+   1424 0A20  F9                     basiserr:stc
+   1425 0A21  C3                              ret
+   1426 0A22  50                     basisok: push ax
+   1427 0A23  53                              push bx
+   1428 0A24  55                              push bp
+   1429 0A25  52                              push dx
+   1430 0A26  56                              push si
+   1431 0A27  33 ED                           xor bp,bp
+   1432 0A29  88 1E 015Er                     mov basis,bl
+   1433 0A2D  33 C9                           xor cx,cx
+   1434 0A2F  32 FF                           xor bh,bh
+   1435 0A31  8A 1E 015Er            ntsloop: mov bl,basis
+   1436 0A35  E8 FF96                         call ddiv
+   1437 0A38  80 C3 30                        add bl,"0"
+   1438 0A3B  80 FB 39                        cmp bl,"9"
+   1439 0A3E  76 03                           jbe ziffok
+   1440 0A40  80 C3 07                        add bl,7
+   1441 0A43  53                     ziffok:  push bx
+   1442 0A44  45                              inc bp
+   1443 0A45  0B C0                           or ax,ax
+   1444 0A47  75 E8                           jnz ntsloop
+   1445 0A49  0B D2                           or dx,dx
+   1446 0A4B  75 E4                           jnz ntsloop
+   1447 0A4D  8B CD                           mov cx,bp
+   1448 0A4F  3A 0C                           cmp cl,[si]
+   1449 0A51  77 13                           ja nozahl
+   1450 0A53  88 4C 01                        mov [si+1],cl
+   1451 0A56  83 C6 02                        add si,2
+   1452 0A59  58                     gtloop:  pop ax
+   1453 0A5A  88 04                           mov [si],al
+   1454 0A5C  46                              inc si
+   1455 0A5D  E2 FA                           loop gtloop
+   1456 0A5F  5E                              pop si
+   1457 0A60  5A                              pop dx
+   1458 0A61  5D                              pop bp
+   1459 0A62  5B                              pop bx
+   1460 0A63  58                              pop ax
+   1461 0A64  F8                              clc
+   1462 0A65  C3                              ret
+   1463 0A66  58                     nozahl:  pop ax
+   1464 0A67  E2 FD                           loop nozahl
+   1465 0A69  5E                              pop si
+   1466 0A6A  C6 44 01 00                     mov byte ptr[si+1],0
+   1467 0A6E  5A                              pop dx
+   1468 0A6F  5D                              pop bp
+   1469 0A70  5B                              pop bx
+   1470 0A71  58                              pop ax
+   1471 0A72  F9                              stc
+   1472 0A73  C3                              ret
+   1473 0A74                         numtostr endp
+   1474
+   1475 0A74                         strtonum proc near
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 26
+SYSTEM.ASM
+
+   1476 0A74  C6 06 015Fr 00                  mov negflag,0
+   1477 0A79  33 C0                           xor ax,ax
+   1478 0A7B  33 D2                           xor dx,dx
+   1479 0A7D  8A 4C 01                        mov cl,[si+1]
+   1480 0A80  0A C9                           or cl,cl
+   1481 0A82  75 01                           jnz zstrok
+   1482 0A84  C3                              ret
+   1483 0A85  53                     zstrok:  push bx
+   1484 0A86  51                              push cx
+   1485 0A87  8B FE                           mov di,si
+   1486 0A89  32 ED                           xor CH,CH
+   1487 0A8B  03 F9                           add di,cx
+   1488 0A8D  47                              inc di
+   1489 0A8E  8A 1D                           mov bl,[di]
+   1490 0A90  80 E3 DF                        and bl,0dfh
+   1491 0A93  80 FB 48                        cmp bl,"H"
+   1492 0A96  75 0B                           jnz nextz
+   1493 0A98  B7 10                           mov bh,10h
+   1494 0A9A  FE C9                           dec cl
+   1495 0A9C  80 F9 08                        cmp cl,8
+   1496 0A9F  76 38                           jbe zok
+   1497 0AA1  EB 10                           jmp short zerror
+   1498 0AA3  80 FB 42               nextz:   cmp bl,"B"
+   1499 0AA6  75 0F                           jnz nextz1
+   1500 0AA8  B7 02                           mov bh,2
+   1501 0AAA  80 F9 21                        cmp cl,21h
+   1502 0AAD  77 04                           ja zerror
+   1503 0AAF  FE C9                           dec cl
+   1504 0AB1  EB 26                           jmp short zok
+   1505 0AB3  59                     zerror:  pop cx
+   1506 0AB4  5B                              pop bx
+   1507 0AB5  F9                              stc
+   1508 0AB6  C3                              ret
+   1509 0AB7  B7 0A                  nextz1:  mov bh,0ah
+   1510 0AB9  80 F9 0B                       cmp cl,0bh
+   1511 0ABC  77 F5                          ja zerror
+   1512 0ABE  80 7C 02 2D                    cmp byte ptr [si+2],"-"
+   1513 0AC2  75 10                          jnz zok1
+   1514 0AC4  FE C9                          dec cl
+   1515 0AC6  B3 0A                          mov bl,0ah
+   1516 0AC8  8B FE                          mov di,si
+   1517 0ACA  83 C7 03                       add di,3
+   1518 0ACD  C6 06 015Fr FF                 mov negflag,-1
+   1519 0AD2  EB 0C                          jmp short stnloop
+   1520 0AD4  80 F9 0B               zok1:   cmp cl,0bh
+   1521 0AD7  74 DA                          jz zerror
+   1522 0AD9  8A DF                  zok:    mov bl,bh
+   1523 0ADB  8B FE                          mov di,si
+   1524 0ADD  83 C7 02                       add di,2
+   1525 0AE0  53                     stnloop:push bx
+   1526 0AE1  51                             push cx
+   1527 0AE2  33 C9                          xor cx,cx
+   1528 0AE4  32 FF                          xor bh,bh
+   1529 0AE6  E8 FECA                        call dmul
+   1530 0AE9  59                             pop cx
+   1531 0AEA  5B                             pop bx
+   1532 0AEB  8A 3D                          mov bh,[di]
+   1533 0AED  80 FF 61                       cmp bh,"a"
+   1534 0AF0  72 03                          jb zfok
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 27
+SYSTEM.ASM
+
+   1535 0AF2  80 E7 DF                       and bh,0dfh
+   1536 0AF5  80 EF 30               zfok:   sub bh,"0"
+   1537 0AF8  80 FF 09                       cmp bh,9
+   1538 0AFB  76 03                          jbe nok
+   1539 0AFD  80 EF 07                       sub bh,7
+   1540 0B00  53                     nok:    push bx
+   1541 0B01  8A DF                          mov bl,bh
+   1542 0B03  32 FF                          xor bh,bh
+   1543 0B05  03 C3                          add ax,bx
+   1544 0B07  83 D2 00                       adc dx,0
+   1545 0B0A  5B                             pop bx
+   1546 0B0B  47                             inc di
+   1547 0B0C  E2 D2                          loop stnloop
+   1548 0B0E  80 3E 015Fr 00                 cmp negflag,0
+   1549 0B13  74 03                          jz zpositiv
+   1550 0B15  E8 FEF3                        call dneg
+   1551 0B18  59                     zpositiv:pop cx
+   1552 0B19  5B                             pop bx
+   1553 0B1A  F8                             clc
+   1554 0B1B  C3                             ret
+   1555 0B1C                         strtonum endp
+   1556
+   1557                              ;Hilfsroutinen
+   1558
+   1559 0B1C                         berechnexy proc near
+   1560 0B1C  50                             push ax
+   1561 0B1D  51                             push cx
+   1562 0B1E  52                             push dx
+   1563 0B1F  32 F6                          xor dh,dh
+   1564 0B21  8B C2                          mov ax,dx
+   1565 0B23  B1 07                          mov cl,7
+   1566 0B25  D3 E0                          shl ax,cl
+   1567 0B27  8B F8                          mov di,ax
+   1568 0B29  03 FA                          add di,dx
+   1569 0B2B  03 FA                          add di,dx
+   1570 0B2D  03 FA                          add di,dx
+   1571 0B2F  03 FA                          add di,dx
+   1572 0B31  03 FA                          add di,dx
+   1573 0B33  03 FA                          add di,dx
+   1574 0B35  03 FA                          add di,dx
+   1575 0B37  03 FA                          add di,dx
+   1576 0B39  03 FA                          add di,dx
+   1577 0B3B  03 FA                          add di,dx
+   1578 0B3D  03 FA                          add di,dx
+   1579 0B3F  03 FA                          add di,dx
+   1580 0B41  03 FA                          add di,dx
+   1581 0B43  03 FA                          add di,dx
+   1582 0B45  03 FA                          add di,dx
+   1583 0B47  03 FA                          add di,dx
+   1584 0B49  03 FA                          add di,dx
+   1585 0B4B  03 FA                          add di,dx
+   1586 0B4D  03 FA                          add di,dx
+   1587 0B4F  03 FA                          add di,dx
+   1588 0B51  03 FA                          add di,dx
+   1589 0B53  03 FA                          add di,dx
+   1590 0B55  03 FA                          add di,dx
+   1591 0B57  03 FA                          add di,dx
+   1592 0B59  03 FA                          add di,dx
+   1593 0B5B  03 FA                          add di,dx
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 28
+SYSTEM.ASM
+
+   1594 0B5D  03 FA                          add di,dx
+   1595 0B5F  03 FA                          add di,dx
+   1596 0B61  03 FA                          add di,dx
+   1597 0B63  03 FA                          add di,dx
+   1598 0B65  03 FA                          add di,dx
+   1599 0B67  03 FA                          add di,dx
+   1600 0B69  5A                             pop dx
+   1601 0B6A  8A C6                          mov al,dh
+   1602 0B6C  32 E4                          xor ah,ah
+   1603 0B6E  D1 E0                          shl ax,1
+   1604 0B70  03 F8                          add di,ax
+   1605 0B72  59                             pop cx
+   1606 0B73  58                             pop ax
+   1607 0B74  8E 06 0001r                    mov es,scrseg
+   1608 0B78  C3                             ret
+   1609 0B79                         berechnexy endp
+   1610
+   1611 0B79                         selectwin proc near
+   1612 0B79  9C                             pushf
+   1613 0B7A  06                             push es
+   1614 0B7B  1E                             push ds
+   1615 0B7C  07                             pop es
+   1616 0B7D  FC                             cld
+   1617 0B7E  A0 000Br                       mov al,wselect
+   1618 0B81  32 E4                          xor ah,ah
+   1619 0B83  B1 03                          mov cl,3
+   1620 0B85  D3 E0                          shl ax,cl
+   1621 0B87  05 000Cr                       add ax,offset windows
+   1622 0B8A  8B F0                          mov si,ax
+   1623 0B8C  BF 0003r                       mov di,offset winypos
+   1624 0B8F  B9 0004                        mov cx,4
+   1625 0B92  F3> A5                         rep movsw
+   1626 0B94  07                             pop es
+   1627 0B95  9D                             popf
+   1628 0B96                         selectwin endp
+   1629
+   1630 0B96                         setcursor proc near
+   1631 0B96  80 3E 000Ar 00                 cmp curflag,0
+   1632 0B9B  74 0A                          jz cursorvis
+   1633 0B9D  B4 02                          mov ah,2
+   1634 0B9F  32 FF                          xor bh,bh
+   1635 0BA1  BA 1900                        mov dx,1900h
+   1636 0BA4  CD 10                          int 10h
+   1637 0BA6  C3                             ret
+   1638 0BA7  A1 0007r               cursorvis:mov ax,word ptr acty
+   1639 0BAA  8B D0                          mov dx,ax
+   1640 0BAC  FE C4                          inc ah
+   1641 0BAE  3A 26 0006r                    cmp ah,widthv
+   1642 0BB2  76 06                          jbe xok
+   1643 0BB4  32 F6                          xor dh,dh
+   1644 0BB6  FE C2                          inc dl
+   1645 0BB8  FE C0                          inc al
+   1646 0BBA  FE C0                  xok:    inc al
+   1647 0BBC  8A 0E 0005r                    mov cl,height
+   1648 0BC0  3A C1                          cmp al,cl
+   1649 0BC2  76 17                          jbe yok
+   1650 0BC4  8A D1                          mov dl,cl
+   1651 0BC6  FE CA                          dec dl
+   1652 0BC8  2A C1                          sub al,cl
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 29
+SYSTEM.ASM
+
+   1653 0BCA  FE C8                          dec al
+   1654 0BCC  74 0D                          jz yok
+   1655 0BCE  8A C8                          mov cl,al
+   1656 0BD0  32 ED                          xor CH,CH
+   1657 0BD2  52                             push dx
+   1658 0BD3  51                     scrcrloop:push cx
+   1659 0BD4  E8 F6A0                        call scrollup
+   1660 0BD7  59                             pop cx
+   1661 0BD8  E2 F9                          loop scrcrloop
+   1662 0BDA  5A                             pop dx
+   1663 0BDB  89 16 0007r            yok:    mov word ptr acty,dx
+   1664 0BDF  03 16 0003r                    add dx,word ptr winypos
+   1665 0BE3  86 F2                          xchg dh,dl
+   1666 0BE5  32 FF                          xor bh,bh
+   1667 0BE7  B4 02                          mov ah,2
+   1668 0BE9  CD 10                          int 10h
+   1669 0BEB  C3                             ret
+   1670 0BEC                         setcursor endp
+   1671
+   1672 0BEC                         saveback proc near
+   1673 0BEC  9C                             pushf
+   1674 0BED  56                             push si
+   1675 0BEE  1E                             push ds
+   1676 0BEF  06                             push es
+   1677 0BF0  FC                             cld
+   1678 0BF1  8B 14                          mov dx,word ptr [si]
+   1679 0BF3  86 F2                          xchg dh,dl
+   1680 0BF5  E8 FF24                        call berechnexy
+   1681 0BF8  8B 4C 02                       mov cx,word ptr [si+2]
+   1682 0BFB  86 E9                          xchg CH,cl
+   1683 0BFD  8B 74 08                       mov si,word ptr[si+8]
+   1684 0C00  87 F7                          xchg si,di
+   1685 0C02  FC                             cld
+   1686 0C03  1E                             push ds
+   1687 0C04  06                             push es
+   1688 0C05  1F                             pop ds
+   1689 0C06  07                             pop es
+   1690 0C07  51                     sbloop: push cx
+   1691 0C08  56                             push si
+   1692 0C09  32 ED                          xor CH,CH
+   1693 0C0B  F3> A4                         rep movsb
+   1694 0C0D  5E                             pop si
+   1695 0C0E  81 C6 00A0                     add si,0a0h
+   1696 0C12  59                             pop cx
+   1697 0C13  FE CD                          dec CH
+   1698 0C15  75 F0                          jnz sbloop
+   1699 0C17  07                             pop es
+   1700 0C18  1F                             pop ds
+   1701 0C19  5E                             pop si
+   1702 0C1A  9D                             popf
+   1703 0C1B  C3                             ret
+   1704 0C1C                         saveback endp
+   1705
+   1706 0C1C                         chkinsert proc near
+   1707 0C1C  9C                             pushf
+   1708 0C1D  50                             push ax
+   1709 0C1E  53                             push bx
+   1710 0C1F  51                             push cx
+   1711 0C20  52                             push dx
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 30
+SYSTEM.ASM
+
+   1712 0C21  56                             push si
+   1713 0C22  57                             push di
+   1714 0C23  80 3E 004Fr 00                 cmp insert,0
+   1715 0C28  74 1B                          jz extchkins
+   1716 0C2A  A0 0154r                       mov al,bufpos
+   1717 0C2D  3A 44 01                       cmp al,[si+1]
+   1718 0C30  74 13                          jz extchkins
+   1719 0C32  8A 04                          mov al,[si]
+   1720 0C34  32 E4                          xor ah,ah
+   1721 0C36  03 F0                          add si,ax
+   1722 0C38  46                             inc si
+   1723 0C39  8B FE                          mov di,si
+   1724 0C3B  47                             inc di
+   1725 0C3C  8B C8                          mov cx,ax
+   1726 0C3E  2A 0E 0154r                    sub cl,bufpos
+   1727 0C42  FD                             std
+   1728 0C43  F3> A4                         rep movsb
+   1729 0C45  5F                     extchkins:pop di
+   1730 0C46  5E                             pop si
+   1731 0C47  5A                             pop dx
+   1732 0C48  59                             pop cx
+   1733 0C49  5B                             pop bx
+   1734 0C4A  58                             pop ax
+   1735 0C4B  9D                             popf
+   1736 0C4C  C3                             ret
+   1737 0C4D                         chkinsert endp
+   1738
+   1739 0C4D                         getpos proc near
+   1740 0C4D  51                              push cx
+   1741 0C4E  A0 0154r                        mov al,bufpos
+   1742 0C51  32 E4                           xor ah,ah
+   1743 0C53  8A 0E 0006r                     mov cl,widthv
+   1744 0C57  F6 F1                           div cl
+   1745 0C59  8B 16 0157r                     mov dx,posxy
+   1746 0C5D  03 D0                           add dx,ax
+   1747 0C5F  59                              pop cx
+   1748 0C60  C3                              ret
+   1749 0C61                         getpos endp
+   1750
+   1751 0C61                         freebuffer proc near
+   1752 0C61  8A 4C 01                       mov cl,[si+1]
+   1753 0C64  0A C9                          or cl,cl
+   1754 0C66  75 01                          jnz delallok
+   1755 0C68  C3                             ret
+   1756 0C69  32 ED                  delallok:xor CH,CH
+   1757 0C6B  8B FE                          mov di,si
+   1758 0C6D  83 C7 02                       add di,2
+   1759 0C70  B0 20                          mov al,20h
+   1760 0C72  06                             push es
+   1761 0C73  1E                             push ds
+   1762 0C74  07                             pop es
+   1763 0C75  FC                             cld
+   1764 0C76  F3> AA                         rep stosb
+   1765 0C78  07                             pop es
+   1766 0C79  8B 16 0157r                    mov dx,posxy
+   1767 0C7D  87 16 0007r                    xchg dx,word ptr acty
+   1768 0C81  52                             push dx
+   1769 0C82  E8 F739                        call print
+   1770 0C85  8F 06 0007r                    pop word ptr acty
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 31
+SYSTEM.ASM
+
+   1771 0C89  8B EE                          mov bp,si
+   1772 0C8B  83 C5 02                       add bp,2
+   1773 0C8E  C6 06 0154r 00                 mov bufpos,0
+   1774 0C93  C6 44 01 00                    mov byte ptr[si+1],0
+   1775 0C97  E8 FFB3                        call getpos
+   1776 0C9A  89 16 0007r                    mov word ptr acty,dx
+   1777 0C9E  56                             push si
+   1778 0C9F  57                             push di
+   1779 0CA0  55                             push bp
+   1780 0CA1  E8 FEF2                        call setcursor
+   1781 0CA4  5D                             pop bp
+   1782 0CA5  5F                             pop di
+   1783 0CA6  5E                             pop si
+   1784 0CA7  C3                             ret
+   1785 0CA8                         freebuffer endp
+   1786
+   1787 0CA8                         code ends
+   1788
+   1789                              end
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 32
+Symbol Table
+
+
+Symbol Name             Type   Value                       Cref  defined at #
+
+??DATE                  Text   "11/09/94"
+??FILENAME              Text   "SYSTEM  "
+??TIME                  Text   "20:27:04"
+??VERSION               Number 0101
+@CPU                    Text   0101H
+@CURSEG                 Text   CODE                        #31  #63
+@FILENAME               Text   SYSTEM
+@WORDSIZE               Text   2                           #31  #63
+ACTX                    Byte   DATA:0008                   12  #42  143
+ACTY                    Byte   DATA:0007                   12  #41  132  139  159  161  170  204  206  220  549  554  572  612  727+
+                                                           789  860  863  869  884  898  970  974  988  994  1638  1663  1767  1770+
+                                                           1776
+ANZKEYS                 Word   DATA:0155                   15  #52  726  762  765
+ASKWINDOW               Near   CODE:01CE                   19  #297
+BASIS                   Byte   DATA:015E                   16  #57  1432  1435
+BASISERR                Near   CODE:0A20                   1421  #1424
+BASISOK                 Near   CODE:0A22                   1423  #1426
+BERECHNEXY              Near   CODE:0B1C                   116  141  160  205  214  327  373  395  430  462  509  575  609  #1559  +
+                                                           1680
+BUFADR                  Word   DATA:004D                   14  #48  729  764
+BUFPOS                  Byte   DATA:0154                   14  #51  749  834  879  883  892  897  911  917  925  932  937  955  983+
+                                                           987  1716  1726  1741  1773
+CHAROK                  Near   CODE:0473                   662  664  666  #668
+CHKINSERT               Near   CODE:0C1C                   848  #1706
+CHKKEY1                 Near   CODE:0550                   770  #780
+CHKKEY10                Near   CODE:05B4                   817  #819
+CHKKEY11                Near   CODE:05BC                   820  #822
+CHKKEY12                Near   CODE:05C4                   823  #825
+CHKKEY2                 Near   CODE:0570                   781  #794
+CHKKEY3                 Near   CODE:057C                   795  #798
+CHKKEY4                 Near   CODE:0584                   799  #801
+CHKKEY5                 Near   CODE:058C                   802  #804
+CHKKEY6                 Near   CODE:0594                   805  #807
+CHKKEY7                 Near   CODE:059C                   808  #810
+CHKKEY8                 Near   CODE:05A4                   811  #813
+CHKKEY9                 Near   CODE:05AC                   814  #816
+CHKOK                   Near   CODE:0927                   1247  1249  #1252
+CHRFOUND                Near   CODE:0489                   679  #684
+CHROK                   Near   CODE:05CB                   826  #828
+CHROK1                  Near   CODE:05DC                   829  #834
+CLCOLLOOP               Near   CODE:0319                   #470  472
+CLENOK                  Near   CODE:0865                   1120  #1124
+CLRCOL                  Near   CODE:030D                   #465  512
+CLREOL                  Near   CODE:0097                   17  #136
+CLRLOOP                 Near   CODE:007C                   #121  129
+CLRSCR                  Near   CODE:0068                   17  #112
+CNVLOOP                 Near   CODE:0430                   #633  637
+COLOR                   Near   CODE:0021                   75  #80
+CONCATSTR               Near   CODE:0896                   25  #1157
+CONTDIVI                Near   CODE:09FE                   1397  #1400
+CONTFR                  Near   CODE:0226                   #344  358
+CONVSTRING              Near   CODE:0429                   23  #626
+COPYSTR                 Near   CODE:0848                   24  #1110
+COUNTOK                 Near   CODE:086B                   1125  #1127
+CR                      Near   CODE:041B                   586  #618
+CURDEL                  Near   CODE:070C                   818  #944  998
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 33
+Symbol Table
+
+CURDELLF                Near   CODE:075A                   821  #982
+CURDLFOK                Near   CODE:0769                   984  #986
+CURDOWN                 Near   CODE:06B7                   809  #916
+CUREND                  Near   CODE:06F2                   815  #935
+CURFLAG                 Byte   DATA:000A                   13  #44  559  564  1631
+CURHOME                 Near   CODE:06DD                   812  #929
+CURLEFT                 Near   CODE:064B                   800  #878
+CURLEFTOK               Near   CODE:065A                   880  #882
+CURRGOK                 Near   CODE:0682                   894  #896
+CURRIGHT                Near   CODE:0672                   803  868  #891
+CURSORVIS               Near   CODE:0BA7                   1632  #1638
+CURUP                   Near   CODE:0699                   806  #905
+CUTCHAR                 Near   CODE:0951                   26  #1280
+CUTLOOP                 Near   CODE:0962                   #1290  1295
+CUTOK                   Near   CODE:096D                   1291  #1296
+DADD                    Near   CODE:09A9                   26  #1337
+DDIV                    Near   CODE:09CE                   27  #1370  1436
+DEFW1                   Near   CODE:0175                   253  #256
+DEFWINDOW               Near   CODE:016F                   19  #251
+DELALL                  Near   CODE:078A                   824  #999
+DELALLOK                Near   CODE:0C69                   1754  #1756
+DELETESTR               Near   CODE:0795                   24  #1004  1276  1302
+DELFLAG                 Byte   DATA:015D                   16  #56  724  828  830  878  891  905  916  929  935  944  982  999
+DELFRAME                Near   CODE:0247                   20  #363
+DELFRLOOP               Near   CODE:0264                   #377  385
+DELFROK                 Near   CODE:024E                   365  #367
+DELLENOK                Near   CODE:07AE                   1013  #1017
+DELLINE                 Near   CODE:00BA                   18  #154
+DELLOOP                 Near   CODE:00E8                   #174  185
+DELOK                   Near   CODE:071A                   946  #948
+DETECTSCR               Near   CODE:0000                   17  #66
+DIVLOOP                 Near   CODE:09E8                   #1387  1402
+DIVOK                   Near   CODE:09FA                   1393  #1398
+DMUL                    Near   CODE:09B3                   27  #1349  1529
+DNEG                    Near   CODE:0A0B                   27  #1411  1550
+DONTINC                 Near   CODE:0605                   852  #854
+DSUB                    Near   CODE:09AE                   26  #1343
+EXITDEFW                Near   CODE:0173                   #254  257  259  261  263  270  272
+EXITINPUT               Near   CODE:0549                   #773  793
+EXITPRINT               Near   CODE:0417                   580  #614
+EXTCHKINS               Near   CODE:0C45                   1715  1718  #1729
+EXTCONSTR               Near   CODE:08C5                   1160  1164  #1184
+EXTCOPYSTR              Near   CODE:0895                   1114  1116  1118  1131  #1154
+EXTCUTCHR               Near   CODE:097B                   1283  1299  #1303
+EXTDELSTR               Near   CODE:07BD                   1007  1009  1011  1021  #1024
+EXTIGNCHR               Near   CODE:0950                   1261  1273  #1277
+EXTINSSTR               Near   CODE:0847                   1058  1060  1062  1065  #1107
+EXTPARSTR               Near   CODE:09A8                   1310  1312  #1334
+EXTPOSSTR               Near   CODE:08FE                   1191  1193  #1223
+FLUSH                   Near   CODE:04A3                   23  #701
+FRAMEOK                 Near   CODE:01F7                   318  #320
+FREEBUFFER              Near   CODE:0C61                   832  1000  #1751
+FREEOK                  Near   CODE:05F4                   836  #848
+FRLOOP                  Near   CODE:0214                   #333  349
+FRLOOP1                 Near   CODE:0218                   #336  344  356
+GETCOLOR                Near   CODE:016B                   19  #246
+GETKEY                  Near   CODE:0518                   #753  768  797  827  847  877  881  895  915  947  981  985  1001
+GETPOS                  Near   CODE:0C4D                   906  922  933  942  #1739  1775
+GETXY                   Near   CODE:03A9                   22  #553
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 34
+Symbol Table
+
+GOTOXY                  Near   CODE:03A2                   22  #548
+GTLOOP                  Near   CODE:0A59                   #1452  1455
+HEIGHT                  Byte   DATA:0005                   12  #39  119  163  167  208  212  217  396  400  428  431  434  466  478+
+                                                           520  595  621  1647
+HIDECURS                Near   CODE:03B6                   #563
+IGNCHAR                 Near   CODE:092C                   25  #1258
+IGNLOOP                 Near   CODE:093B                   #1266  1270
+IGNOK                   Near   CODE:0944                   1267  #1271
+INITSCR                 Near   CODE:002F                   17  #86
+INPUT                   Near   CODE:04B4                   23  #713
+INSERT                  Byte   DATA:004F                   14  #49  733  796  1714
+INSERTSTR               Near   CODE:07EB                   24  #1055
+INSLINE                 Near   CODE:0111                   18  #199
+INSLOOP                 Near   CODE:014D                   #224  235
+KEYFLAG                 Byte   DATA:004C                   13  #47  657  661  725  755
+KEYOK                   Near   CODE:0542                   763  767  #769
+LASTLINE                Near   CODE:00FF                   164  #187  209  238  398  421  433  455
+LENGTHOK                Near   CODE:0439                   635  #638
+LF                      Near   CODE:041F                   588  #620
+MODEOK                  Near   CODE:0037                   89  #91
+MONO                    Near   CODE:0013                   #76
+NEGFLAG                 Byte   DATA:015F                   16  #58  1476  1518  1548
+NEWKOORD                Near   CODE:0405                   596  #607  619  622
+NEXTZ                   Near   CODE:0AA3                   1492  #1498
+NEXTZ1                  Near   CODE:0AB7                   1499  #1509
+NOCURMOVE               Near   CODE:06B4                   908  #915  919  921
+NODELETE                Near   CODE:0755                   956  #979
+NODELETE1               Near   CODE:0736                   962  #964
+NOK                     Near   CODE:0B00                   1538  #1540
+NOOUTPUT                Near   CODE:049E                   686  #694
+NOSCROLL                Near   CODE:0508                   742  #747
+NOSTRING                Near   CODE:0453                   641  #650
+NOUPCHAR                Near   CODE:052D                   756  758  760  #762
+NOZAHL                  Near   CODE:0A66                   1449  #1463  1464
+NTSLOOP                 Near   CODE:0A31                   #1435  1444  1446
+NUMTOSTR                Near   CODE:0A16                   27  #1419
+OKDELSTR                Near   CODE:07BE                   1022  #1025
+OKUPSTR                 Near   CODE:0911                   1238  #1240
+OUTFLAG                 Byte   DATA:015C                   15  #55  658  685
+PARTOSTR                Near   CODE:097C                   26  #1306
+POSCURS                 Near   CODE:077F                   990  #994
+POSCURSOR               Near   CODE:063B                   #869  886  890  901  904  914  928  934  943  978
+POSFOUND                Near   CODE:0901                   1211  #1225
+POSLOOP                 Near   CODE:08E7                   #1206  1218
+POSSTR                  Near   CODE:08C6                   25  #1187
+POSXY                   Word   DATA:0157                   15  #53  728  743  745  788  854  858  864  866  969  1745  1766
+PRINT                   Near   CODE:03BE                   22  #568  691  740  791  862  972  1769
+PRINTOK                 Near   CODE:061B                   856  #860
+PRTLOOP                 Near   CODE:03DC                   #584  611
+PRTOK                   Near   CODE:040E                   592  #611
+PRTSCROLL               Near   CODE:03F8                   #597  623
+PUTFRAME                Near   CODE:01F0                   20  #316
+READKEY                 Near   CODE:0457                   23  #656
+RKLOOP                  Near   CODE:045E                   #659  683
+SAVEBACK                Near   CODE:0BEC                   320  #1672
+SBLOOP                  Near   CODE:0C07                   #1690  1698
+SCRCRLOOP               Near   CODE:0BD3                   #1658  1661
+SCRDNLOOP               Near   CODE:02E3                   #442  453
+SCRDNOK                 Near   CODE:02D2                   432  #434
+Turbo Assembler  Version 1.01        11/09/94 20:27:05        Page 35
+Symbol Table
+
+SCRLFLOOP               Near   CODE:0338                   #486  498
+SCRLFOK                 Near   CODE:0322                   464  #476
+SCRMODE                 Byte   DATA:0000                   11  #35  76  80  87
+SCROLLDN                Near   CODE:02B9                   21  #424
+SCROLLLF                Near   CODE:02FD                   21  #458
+SCROLLRG                Near   CODE:0353                   22  #505
+SCROLLUP                Near   CODE:0277                   21  #391  602  1659
+SCRRGLOOP               Near   CODE:0387                   #529  541
+SCRRGOK                 Near   CODE:0365                   511  #513
+SCRSEG                  Word   DATA:0001                   11  #36  77  81  1607
+SCRUPFLAG               Byte   DATA:0160                   16  #59  399  723  741  744  746  855  859  865  867
+SCRUPLOOP               Near   CODE:029F                   #408  419
+SCRUPOK                 Near   CODE:028A                   397  #399
+SELECTNEW               Near   CODE:01C9                   289  #292
+SELECTWIN               Near   CODE:0B79                   109  292  313  #1611
+SELWINDOW               Near   CODE:01E6                   20  #310
+SETCOLOR                Near   CODE:0167                   18  #241
+SETCURSOR               Near   CODE:0B96                   133  550  560  565  613  873  996  #1630  1780
+SHOWCURS                Near   CODE:03AE                   #558
+SPEZIAL1                Near   CODE:0236                   338  #354
+SPEZIAL2                Near   CODE:023B                   340  #357  360
+SPEZIAL3                Near   CODE:0240                   342  #359
+STARTDIV                Near   CODE:09D6                   1374  #1377
+STNLOOP                 Near   CODE:0AE0                   1519  #1525  1547
+STRBUF                  Byte   DATA:0050                   14  #50  734
+STRINGOK                Near   CODE:0447                   643  #645
+STRTONUM                Near   CODE:0A74                   28  #1475
+SYSSTR                  Byte   DATA:0159                   15  #54  689  690
+TSTCHAR                 Near   CODE:0478                   669  #671
+UPLOOP                  Near   CODE:0919                   #1245  1252
+UPSTR                   Near   CODE:0909                   25  #1235
+WIDTHV                  Byte   DATA:0006                   12  #40  142  188  463  510  513  591  887  900  910  918  924  991     +
+                                                           1641  1743
+WINATTR                 Byte   DATA:0009                   12  #43  117  146  191  242  247  469  482  524  583
+WINDOWS                 Byte   DATA:000C                   13  #46  93  94  281  303  1621
+WINXPOS                 Byte   DATA:0004                   11  #38  203
+WINYPOS                 Byte   DATA:0003                   11  #37  115  140  158  211  394  427  461  508  574  608  1623  1664
+WSELECT                 Byte   DATA:000B                   13  #45  108  288  312  1617
+XOK                     Near   CODE:0BBA                   1642  #1646
+YOK                     Near   CODE:0BDB                   1649  1654  #1663
+ZERROR                  Near   CODE:0AB3                   1497  1502  #1505  1511  1521
+ZFOK                    Near   CODE:0AF5                   1534  #1536
+ZIFFOK                  Near   CODE:0A43                   1439  #1441
+ZOK                     Near   CODE:0AD9                   1496  1504  #1522
+ZOK1                    Near   CODE:0AD4                   1513  #1520
+ZPOSITIV                Near   CODE:0B18                   1549  #1551
+ZSTROK                  Near   CODE:0A85                   1481  #1483
+
+Groups & Segments       Bit Size Align  Combine Class      Cref  defined at #
+
+CODE                    16  0CA8 Byte   Public             #63  64
+DATA                    16  0161 Word   Public             #31  64
+
